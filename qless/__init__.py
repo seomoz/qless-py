@@ -28,7 +28,8 @@ class lua(object):
             return self.redis.execute_command('evalsha', self.sha, len(keys), *(keys + args))
         except Exception as e:
             self.reload()
-            return self.redis.execute_command('evalsha', self.sha, len(keys), *(keys + args))
+            return self.
+            redis.execute_command('evalsha', self.sha, len(keys), *(keys + args))
 
 class Stats(object):
     def __init__(self, r):
@@ -214,8 +215,8 @@ class Job(object):
         self.queue    = queue
         self.history  = history or []
         # Our lua scripts
-        _put          = lua('put'   , self.redis)
-        _cancel       = lua('cancel', self.redis)
+        self._put     = lua('put'   , self.redis)
+        self._cancel  = lua('cancel', self.redis)
     
     def __getitem__(self, key):
         return self.data.get(key)
@@ -245,6 +246,10 @@ class Job(object):
     
     def __repr__(self):
         return '<qless:Job %s>' % self.id
+    
+    def remaining(self):
+        '''How long until this expires, in seconds'''
+        return time.time() - self.expires
     
     def move(self, queue):
         '''Put(1, queue, id, data, now, [priority, [tags, [delay]]])
