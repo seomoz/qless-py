@@ -33,10 +33,13 @@ if args.verbose:
 else:
     logger.setLevel(logging.WARN)
 
+# Our qless client
+client = qless.client()
+
 class ForgetfulWorker(threading.Thread):
     def __init__(self, *args, **kwargs):
         threading.Thread.__init__(self, *args, **kwargs)
-        self.q = qless.Queue('testing')
+        self.q = client.queue('testing')
         self.q._hb = 1
         self.q.worker += '-' + self.getName() 
     
@@ -57,16 +60,17 @@ class ForgetfulWorker(threading.Thread):
                 self.q.complete(job)
 
 # Make sure that the redis instance is empty first
-if len(qless.r.keys('*')):
+if len(client.redis.keys('*')):
     print 'Must begin on an empty Redis instance'
     exit(1)
 
 # This is how much CPU Redis had used /before/
-cpuBefore = qless.r.info()['used_cpu_user'] + qless.r.info()['used_cpu_sys']
+cpuBefore = client.redis.info()['used_cpu_user'] + client.redis.info()['used_cpu_sys']
 # This is how long it took to add the jobs
 putTime = -time.time()
 # Alright, let's make a bunch of jobs
-jids = [qless.Job.put('testing', {'test': 'benchmark', 'count': c}) for c in range(args.numJobs)]
+testing = client.queue('testing')
+jids = [testing.put({'test': 'benchmark', 'count': c}) for c in range(args.numJobs)]
 putTime += time.time()
 
 # This is how long it took to run the workers
@@ -90,7 +94,7 @@ class TestQlessBench(unittest.TestCase):
         #   2) Non-zero mean, non-zero std deviation
         #   3) Wait stats for all jobs
         #   4) Non-zero 
-        stats = qless.Stats.get('testing', time.time())
+        stats = client.stats.get('testing', time.time())
         self.assertEqual(stats['run']['count'], args.numJobs)
         self.assertTrue( stats['run']['mean' ], 0)
         self.assertTrue( stats['run']['std'  ], 0)
@@ -110,28 +114,29 @@ def histo(l):
         print '\t\t%2i, %10.9f, %i' % (i, float(l[i]) / count, l[i])
 
 # Now we'll print out some interesting stats
-stats = qless.Stats.get('testing', time.time())
+stats = client.stats.get('testing', time.time())
 print 'Wait:'
 print '\tCount: %i'  % stats['wait']['count']
 print '\tMean : %fs' % stats['wait']['mean']
 print '\tSDev : %f'  % stats['wait']['std']
-print '\tHist :'
+print '\tWait Time Histogram:'
 histo(stats['wait']['histogram'])
 
 print 'Run:'
 print '\tCount: %i'  % stats['run']['count']
 print '\tMean : %fs' % stats['run']['mean']
 print '\tSDev : %f'  % stats['run']['std']
+print '\tCompletion Time Histogram:'
 histo(stats['run']['histogram'])
 
 print '=' * 50
 print 'Put jobs : %fs' % putTime
 print 'Do jobs  : %fs' % workTime
-info = qless.r.info()
+info = client.redis.info()
 print 'Redis Mem: %s'  % info['used_memory_human']
 print 'Redis Lua: %s'  % info['used_memory_lua']
 print 'Redis CPU: %fs' % (info['used_cpu_user'] + info['used_cpu_sys'] - cpuBefore)
 
 # Flush the database when we're done
 print 'Flushing'
-qless.r.flushdb()
+client.redis.flushdb()
