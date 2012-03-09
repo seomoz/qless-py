@@ -28,8 +28,7 @@ class lua(object):
             return self.redis.execute_command('evalsha', self.sha, len(keys), *(keys + args))
         except Exception as e:
             self.reload()
-            return self.
-            redis.execute_command('evalsha', self.sha, len(keys), *(keys + args))
+            return self.redis.execute_command('evalsha', self.sha, len(keys), *(keys + args))
 
 class Stats(object):
     def __init__(self, r):
@@ -88,7 +87,7 @@ class Config(object):
             it = iter(self._get([], []))
             return dict(izip(it, it))
     
-    def set(option, value=None):
+    def set(self, option, value=None):
         '''SetConfig(0, option, [value])
         -----------------------------
         Set the configuration value for the provided option. If `value` is omitted,
@@ -102,7 +101,7 @@ class Queue(object):
     def __init__(self, name, r, worker):
         self.name    = name
         self.redis   = r
-        self._worker = worker
+        self.worker  = worker
         self._hb     = 60
         # Our lua functions
         self._put       = lua('put'      , self.redis)
@@ -113,18 +112,18 @@ class Queue(object):
         self._heartbeat = lua('heartbeat', self.redis)
     
     def put(self, data, priority=None, tags=None, delay=None):
-        '''Put(1, queue, id, data, now, [priority, [tags, [delay]]])
-        ---------------------------------------------------------------    
-        Either create a new job in the provided queue with the provided attributes,
-        or move that job into that queue. If the job is being serviced by a worker,
-        subsequent attempts by that worker to either `heartbeat` or `complete` the
-        job should fail and return `false`.
-    
-        The `priority` argument should be negative to be run sooner rather than 
-        later, and positive if it's less important. The `tags` argument should be
-        a JSON array of the tags associated with the instance and the `valid after`
-        argument should be in how many seconds the instance should be considered 
-        actionable.'''
+        # '''Put(1, queue, id, data, now, [priority, [tags, [delay]]])
+        # ---------------------------------------------------------------    
+        # Either create a new job in the provided queue with the provided attributes,
+        # or move that job into that queue. If the job is being serviced by a worker,
+        # subsequent attempts by that worker to either `heartbeat` or `complete` the
+        # job should fail and return `false`.
+        #     
+        # The `priority` argument should be negative to be run sooner rather than 
+        # later, and positive if it's less important. The `tags` argument should be
+        # a JSON array of the tags associated with the instance and the `valid after`
+        # argument should be in how many seconds the instance should be considered 
+        # actionable.'''
         return self._put([self.name], [
             uuid.uuid1().hex,
             json.dumps(data),
@@ -140,7 +139,7 @@ class Queue(object):
         Passing in the queue from which to pull items, the current time, when the locks
         for these returned items should expire, and the number of items to be popped
         off.'''
-        results = [Job(**json.loads(j)) for j in self._pop([self.name], [self.worker, count or 1, time.time(), time.time() + self._hb])]
+        results = [Job(self.redis, **json.loads(j)) for j in self._pop([self.name], [self.worker, count or 1, time.time(), time.time() + self._hb])]
         if count == None:
             return (len(results) and results[0]) or None
         return results
@@ -150,7 +149,7 @@ class Queue(object):
         --------------------------
         Similar to the `Pop` command, except that it merely peeks at the next items
         in the queue.'''
-        results = [Job(**json.loads(r)) for r in self._peek([self.name], [count or 1, time.time()])]
+        results = [Job(self.redis, **json.loads(r)) for r in self._peek([self.name], [count or 1, time.time()])]
         if count == None:
             return (len(results) and results[0]) or None
         return results
@@ -194,7 +193,7 @@ class Queue(object):
                 time.time(), json.dumps(job.data)]) or False
     
     def __len__(self):
-        with r.pipeline() as p:
+        with self.redis.pipeline() as p:
             o = p.zcard('ql:q:' + self.name + '-locks')
             o = p.zcard('ql:q:' + self.name + '-work')
             o = p.zcard('ql:q:' + self.name + '-scheduled')
