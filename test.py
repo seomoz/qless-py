@@ -662,6 +662,18 @@ class TestQless(unittest.TestCase):
         job.cancel()
         self.assertEqual(len(self.client.tracked()['expired']), 1)
     
+    def test_track_tag(self):
+        # In this test, we want to make sure that when we begin tracking
+        # a job, we can optionally provide tags with it, and those tags
+        # get saved.
+        #   1) Put job, ensure no tags
+        #   2) Track job, ensure tags
+        job = self.client.job(self.q.put({'test':'track'}))
+        self.assertEqual(job.tags, [])
+        job.track('foo', 'bar')
+        job = self.client.job(job.id)
+        self.assertEqual(job.tags, ['foo', 'bar'])
+    
     def test_stats_failed(self):
         # In this test, we want to make sure that statistics are
         # correctly collected about how many items are currently failed

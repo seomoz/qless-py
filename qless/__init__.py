@@ -278,8 +278,10 @@ class Job(object):
         will fail. If you try to get the data on the object, you will get nothing.'''
         return self._cancel([], [self.id])
     
-    def track(self):
-        return self._track([], ['track', self.id, time.time()])
+    def track(self, *tags):
+        args = ['track', self.id, time.time()]
+        args.extend(tags)
+        return self._track([], args)
     
     def untrack(self):
         return self._track([], ['untrack', self.id, time.time()])
