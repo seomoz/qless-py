@@ -299,6 +299,7 @@ class TestQless(unittest.TestCase):
         #   2) Fail a job
         #   3) Ensure the queue is empty, and that there's something
         #       in the failed endpoint
+        #   4) Ensure that the job still has its original queue
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
         self.assertEqual(len(self.client.stats.failed()), 0)
         jid = self.q.put({'test': 'fail_failed'})
@@ -310,7 +311,8 @@ class TestQless(unittest.TestCase):
         })
         results = self.client.stats.failed('foo')
         self.assertEqual(results['total'], 1)
-        self.assertEqual(results['jobs'][0]['id'], jid)
+        self.assertEqual(results['jobs'][0].id, jid)
+        self.assertEqual(results['jobs'][0].queue, 'testing')
     
     def test_pop_fail(self):
         # In this test, we want to make sure that we can pop a job,
@@ -334,7 +336,7 @@ class TestQless(unittest.TestCase):
         })
         results = self.client.stats.failed('foo')
         self.assertEqual(results['total'], 1)
-        self.assertEqual(results['jobs'][0]['id'], jid)
+        self.assertEqual(results['jobs'][0].id, jid)
     
     def test_fail_complete(self):
         # Make sure that if we complete a job, we cannot fail it.
@@ -668,11 +670,70 @@ class TestQless(unittest.TestCase):
         # get saved.
         #   1) Put job, ensure no tags
         #   2) Track job, ensure tags
-        job = self.client.job(self.q.put({'test':'track'}))
+        job = self.client.job(self.q.put({'test':'track_tag'}))
         self.assertEqual(job.tags, [])
         job.track('foo', 'bar')
         job = self.client.job(job.id)
         self.assertEqual(job.tags, ['foo', 'bar'])
+    
+    def test_retries(self):
+        # In this test, we want to make sure that jobs are given a
+        # certain number of retries before automatically being considered
+        # failed.
+        #   1) Put a job with a few retries
+        #   2) Verify there are no failures
+        #   3) Lose the heartbeat as many times
+        #   4) Verify there are failures
+        #   5) Verify the queue is empty
+        self.assertEqual(self.client.stats.failed(), {})
+        self.q.put({'test':'retries'}, retries=2)
+        # Easier to lose the heartbeat lock
+        self.q._hb = -10
+        self.assertNotEqual(self.q.pop(), None)
+        self.assertEqual(self.client.stats.failed(), {})
+        self.assertNotEqual(self.q.pop(), None)
+        self.assertEqual(self.client.stats.failed(), {})
+        self.assertNotEqual(self.q.pop(), None)
+        self.assertEqual(self.client.stats.failed(), {})
+        # This one should do it
+        self.assertEqual(self.q.pop(), None)
+        self.assertEqual(self.client.stats.failed(), {'failed-retries-testing':1})
+    
+    def test_retries_complete(self):
+        # In this test, we want to make sure that jobs have their number
+        # of remaining retries reset when they are put on a new queue
+        #   1) Put an item with 2 retries
+        #   2) Lose the heartbeat once
+        #   3) Get the job, make sure it has 1 remaining
+        #   4) Complete the job
+        #   5) Get job, make sure it has 2 remaining
+        jid = self.q.put({'test':'retries_complete'}, retries=2)
+        self.q._hb = -10
+        job = self.q.pop()
+        self.assertNotEqual(job, None)
+        job = self.q.pop()
+        self.assertEqual(job.remaining, 1)
+        self.q.complete(job)
+        job = self.client.job(jid)
+        self.assertEqual(job.remaining, 2)
+    
+    def test_retries_put(self):
+        # In this test, we want to make sure that jobs have their number
+        # of remaining retries reset when they are put on a new queue
+        #   1) Put an item with 2 retries
+        #   2) Lose the heartbeat once
+        #   3) Get the job, make sure it has 1 remaining
+        #   4) Re-put the job in the queue with job.move
+        #   5) Get job, make sure it has 2 remaining
+        jid = self.q.put({'test':'retries_put'}, retries=2)
+        self.q._hb = -10
+        job = self.q.pop()
+        self.assertNotEqual(job, None)
+        job = self.q.pop()
+        self.assertEqual(job.remaining, 1)
+        job.move('testing')
+        job = self.client.job(jid)
+        self.assertEqual(job.remaining, 2)
     
     def test_stats_failed(self):
         # In this test, we want to make sure that statistics are

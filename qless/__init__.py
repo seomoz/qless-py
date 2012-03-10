@@ -66,7 +66,9 @@ class Stats(object):
         if not t:
             return json.loads(self._failed([], []))
         else:
-            return json.loads(self._failed([], [t, start, limit]))
+            results = json.loads(self._failed([], [t, start, limit]))
+            results['jobs'] = [Job(self.redis, **j) for j in results['jobs']]
+            return results
 
 class Config(object):
     def __init__(self, r):
@@ -111,9 +113,9 @@ class Queue(object):
         self._complete  = lua('complete' , self.redis)
         self._heartbeat = lua('heartbeat', self.redis)
     
-    def put(self, data, priority=None, tags=None, delay=None):
-        # '''Put(1, queue, id, data, now, [priority, [tags, [delay]]])
-        # ---------------------------------------------------------------    
+    def put(self, data, priority=None, tags=None, delay=None, retries=None):
+        # '''Put(1, queue, id, data, now, [priority, [tags, [delay, [retries]]]])
+        # -----------------------------------------------------------------------
         # Either create a new job in the provided queue with the provided attributes,
         # or move that job into that queue. If the job is being serviced by a worker,
         # subsequent attempts by that worker to either `heartbeat` or `complete` the
@@ -130,7 +132,8 @@ class Queue(object):
             time.time(),
             priority or 0,
             json.dumps(tags or []),
-            delay or 0
+            delay or 0,
+            retries or 5
         ])
     
     def pop(self, count=None):
@@ -200,23 +203,26 @@ class Queue(object):
             return sum(p.execute())
 
 class Job(object):
-    def __init__(self, r, id, data, priority, tags, worker, expires, state, queue, history=[]):
+    def __init__(self, r, id, data, priority, tags, worker, expires, state, queue, remaining, retries, failure={}, history=[]):
         # The redis instance this job is associated with
-        self.redis    = r
+        self.redis     = r
         # The actual meat and potatoes of the job
-        self.id       = id
-        self.data     = data or {}
-        self.priority = priority
-        self.tags     = tags or []
-        self.worker   = worker
-        self.expires  = expires
-        self.state    = state
-        self.queue    = queue
-        self.history  = history or []
+        self.id        = id
+        self.data      = data or {}
+        self.priority  = priority
+        self.tags      = tags or []
+        self.worker    = worker
+        self.expires   = expires
+        self.state     = state
+        self.queue     = queue
+        self.retries   = retries
+        self.remaining = remaining
+        self.failure   = failure or {}
+        self.history   = history or []
         # Our lua scripts
-        self._put     = lua('put'   , self.redis)
-        self._track   = lua('track' , self.redis)
-        self._cancel  = lua('cancel', self.redis)
+        self._put      = lua('put'   , self.redis)
+        self._track    = lua('track' , self.redis)
+        self._cancel   = lua('cancel', self.redis)
     
     def __getitem__(self, key):
         return self.data.get(key)
