@@ -612,6 +612,56 @@ class TestQless(unittest.TestCase):
         self.assertEqual(sum(stats['run' ]['histogram']), stats['run' ]['count'])
         self.assertEqual(sum(stats['wait']['histogram']), stats['wait']['count'])
     
+    def test_queues(self):
+        # In this test, we want to make sure that the queues function
+        # can correctly identify the numbers associated with that queue
+        #   1) Make sure we get nothing for no queues
+        #   2) Put delayed item, check
+        #   3) Put item, check
+        #   4) Put, pop item, check
+        #   5) Put, pop, lost item, check
+        self.assertEqual(len(self.q), 0)
+        self.assertEqual(self.client.queues(), {})
+        # Now, let's actually add an item to a queue, but scheduled
+        self.q.put({'test': 'queues'}, delay=10)
+        expected = {
+            'name': 'testing',
+            'stalled': 0,
+            'waiting': 0,
+            'running': 0,
+            'scheduled': 1
+        }
+        self.assertEqual(self.client.queues(), [expected])
+        self.q.put({'test': 'queues'})
+        expected['waiting'] += 1
+        self.assertEqual(self.client.queues(), [expected])
+        self.q.put({'test': 'queues'})
+        job = self.q.pop()
+        expected['running'] += 1
+        self.assertEqual(self.client.queues(), [expected])
+        # Now we'll have to mess up our heartbeat to make this work
+        self.q.put({'test': 'queues'})
+        self.q._hb = -60
+        job = self.q.pop()
+        expected['stalled'] += 1
+        self.assertEqual(self.client.queues(), [expected])
+    
+    def test_track(self):
+        # In this test, we want to make sure that tracking works as expected.
+        #   1) Check tracked jobs, expect none
+        #   2) Put, Track a job, check
+        #   3) Untrack job, check
+        #   4) Track job, cancel, check
+        self.assertEqual(self.client.tracked(), {'expired':{}, 'jobs':[]})
+        job = self.client.job(self.q.put({'test':'track'}))
+        job.track()
+        self.assertEqual(len(self.client.tracked()['jobs']), 1)
+        job.untrack()
+        self.assertEqual(len(self.client.tracked()['jobs']), 0)
+        job.track()
+        job.cancel()
+        self.assertEqual(len(self.client.tracked()['expired']), 1)
+    
     def test_stats_failed(self):
         # In this test, we want to make sure that statistics are
         # correctly collected about how many items are currently failed
@@ -771,6 +821,15 @@ class TestQless(unittest.TestCase):
         # Malformed dleay
         self.assertRaises(Exception, put, *(['foo'], ['deadbeef', '{}', 12345, 0, '[]', 'howdy']))
     
+    def test_lua_queues(self):
+        queues = qless.lua('queues', self.redis)
+        # Passing in keys
+        self.assertRaises(Exception, queues, *(['foo'], [12345]))
+        # Missing time
+        self.assertRaises(Exception, queues, *([], []))
+        # Malformed time
+        self.assertRaises(Exception, queues, *([], ['howdy']))
+    
     def test_lua_setconfig(self):
         setconfig = qless.lua('setconfig', self.redis)
         # Passing in keys
@@ -784,6 +843,19 @@ class TestQless(unittest.TestCase):
         self.assertRaises(Exception, stats, *([], []))
         # Missing date
         self.assertRaises(Exception, stats, *([], ['foo']))
+    
+    def test_lua_track(self):
+        track = qless.lua('track', self.redis)
+        # Passing in keys
+        self.assertRaises(Exception, track, *(['foo'], []))
+        # Unknown command
+        self.assertRaises(Exception, track, *([], ['fslkdjf', 'deadbeef', 12345]))
+        # Missing jid
+        self.assertRaises(Exception, track, *([], ['track']))
+        # Missing time
+        self.assertRaises(Exception, track, *([], ['track', 'deadbeef']))
+        # Malformed time
+        self.assertRaises(Exception, track, *([], ['track', 'deadbeef', 'howdy']))
 
 if __name__ == '__main__':
     unittest.main()

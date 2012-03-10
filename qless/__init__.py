@@ -215,6 +215,7 @@ class Job(object):
         self.history  = history or []
         # Our lua scripts
         self._put     = lua('put'   , self.redis)
+        self._track   = lua('track' , self.redis)
         self._cancel  = lua('cancel', self.redis)
     
     def __getitem__(self, key):
@@ -276,6 +277,12 @@ class Job(object):
         attempts to renew a heartbeat will fail, and any attempts to complete it
         will fail. If you try to get the data on the object, you will get nothing.'''
         return self._cancel([], [self.id])
+    
+    def track(self):
+        return self._track([], ['track', self.id, time.time()])
+    
+    def untrack(self):
+        return self._track([], ['untrack', self.id, time.time()])
 
 class client(object):
     def __init__(self, *args, **kwargs):
@@ -290,10 +297,20 @@ class client(object):
         self.stats  = Stats(self.redis)
         self.config = Config(self.redis)
         # Client's lua scripts
-        self._get   = lua('get', self.redis)
+        self._get    = lua('get'   , self.redis)
+        self._track  = lua('track' , self.redis)
+        self._queues = lua('queues', self.redis)
     
     def queue(self, name):
         return Queue(name, self.redis, self.worker)
+    
+    def queues(self):
+        return json.loads(self._queues([], [time.time()]))
+    
+    def tracked(self):
+        results = json.loads(self._track([], []))
+        results['jobs'] = [Job(self.redis, **j) for j in results['jobs']]
+        return results
     
     def job(self, id):
         '''Get(0, id)
