@@ -114,7 +114,7 @@ def histo(l):
         print '\t\t%2i, %10.9f, %i' % (i, float(l[i]) / count, l[i])
 
 # Now we'll print out some interesting stats
-stats = client.stats.get('testing', time.time())
+stats = client.queue('testing').stats()
 print 'Wait:'
 print '\tCount: %i'  % stats['wait']['count']
 print '\tMean : %fs' % stats['wait']['mean']
