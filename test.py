@@ -136,13 +136,26 @@ class TestQless(unittest.TestCase):
         self.assertEqual(self.client.stats.failed(), {})
     
     def test_same_priority_order(self):
-        # In this test, we'd like to make sure that jobs with identical
-        # priority are popped off in the same order that that they were
-        # given.
-        #   1) Put a bunch of jobs
-        #   2) Pop each of said jobs
-        #   3) Make sure that we get them out in the order we put them
-        pass
+        # In this test, we want to make sure that jobs are popped
+        # off in the same order they were put on, priorities being
+        # equal.
+        #   1) Put some jobs
+        #   2) Pop some jobs, save jids
+        #   3) Put more jobs
+        #   4) Pop until empty, saving jids
+        #   5) Ensure popped jobs are in the same order
+        self.assertEqual(len(self.q), 0, 'Start with an empty queue')
+        jids = [self.q.put({'test':'put_pop_order', 'count':c}) for c in range(20)]
+        popped = [job.id for job in [self.q.pop() for c in range(10)]]
+        for i in range(10):
+            jids.extend(self.q.put({'test':'put_pop_order', 'count':c}, priority=i) for c in range(10))
+            popped.extend([job.id for job in self.q.pop(5)])
+        next = self.q.pop()
+        while next:
+            popped.append(next.id)
+            next = self.q.pop()
+        
+        self.assertEqual(jids, popped)
     
     def test_scheduled(self):
         # In this test, we'd like to make sure that we can't pop
@@ -738,12 +751,73 @@ class TestQless(unittest.TestCase):
     def test_stats_failed(self):
         # In this test, we want to make sure that statistics are
         # correctly collected about how many items are currently failed
-        pass
+        #   1) Put an item
+        #   2) Ensure we don't have any failed items in the stats for that queue
+        #   3) Fail that item
+        #   4) Ensure that failures and failed both increment
+        #   5) Put that item back
+        #   6) Ensure failed decremented, failures untouched
+        jid = self.q.put({'test':'stats_failed'})
+        stats = self.client.stats.get('testing')
+        self.assertEqual(stats['failed'  ], 0)
+        self.assertEqual(stats['failures'], 0)
+        job = self.client.job(jid)
+        self.q.fail(job, 'foo', 'bar')
+        stats = self.client.stats.get('testing')
+        self.assertEqual(stats['failed'  ], 1)
+        self.assertEqual(stats['failures'], 1)
+        job.move('testing')
+        stats = self.client.stats.get('testing')
+        self.assertEqual(stats['failed'  ], 0)
+        self.assertEqual(stats['failures'], 1)
     
-    def test_stats_failures(self):
-        # In this test, we want to make sure that statistics are
-        # correctly collected about how many items have failed
-        pass
+    def test_stats_retries(self):
+        # In this test, we want to make sure that retries are getting
+        # captured correctly in statistics
+        #   1) Put a job
+        #   2) Pop job, lose lock
+        #   3) Ensure no retries in stats
+        #   4) Pop job,
+        #   5) Ensure one retry in stats
+        jid = self.q.put({'test':'stats_retries'})
+        self.q._hb = -10
+        job = self.q.pop()
+        self.assertEqual(self.client.stats.get('testing')['retries'], 0)
+        job = self.q.pop()
+        self.assertEqual(self.client.stats.get('testing')['retries'], 0)
+    
+    def test_stats_failed_original_day(self):
+        # In this test, we want to verify that if we unfail a job on a
+        # day other than the one on which it originally failed, that we
+        # the `failed` stats for the original day are decremented, not
+        # today.
+        #   1) Put a job
+        #   2) Fail that job
+        #   3) Advance the clock 24 hours
+        #   4) Put the job back
+        #   5) Check the stats with today, check failed = 0, failures = 0
+        #   6) Check 'yesterdays' stats, check failed = 0, failures = 1
+        jid = self.q.put({'test':'stats_failed_original_day'})
+        job = self.client.job(jid)
+        self.q.fail(job, 'foo', 'bar')
+        stats = self.client.stats.get('testing')
+        self.assertEqual(stats['failures'], 1)
+        self.assertEqual(stats['failed'  ], 1)
+        # Now let's fiddle with the time
+        oldtime = time.time
+        now = time.time()
+        time.time = lambda: now + 86400
+        job.move('testing')
+        # Now check tomorrow's stats
+        today = self.client.stats.get('testing')
+        self.assertEqual(today['failures'], 0)
+        self.assertEqual(today['failed'  ], 0)
+        # Make sure that we reset it to the old system time function!
+        time.time = oldtime
+        self.assertTrue(sum(time.time() - time.time() for i in range(200)) < 0)
+        yesterday = self.client.stats.get('testing')
+        self.assertEqual(yesterday['failures'], 1)
+        self.assertEqual(yesterday['failed']  , 0)
     
     # ==================================================================
     # In these tests, we want to ensure that if we don't provide enough

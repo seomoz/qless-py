@@ -36,7 +36,7 @@ class Stats(object):
         self._failed = lua('failed', r)
         self.redis   = r
     
-    def get(self, queue, date):
+    def get(self, queue, date=None):
         '''Stats(0, queue, date)
         ---------------------
         Return the current statistics for a given queue on a given date. The results 
@@ -55,7 +55,7 @@ class Stats(object):
         the minute resolution for the first hour, the 15-minute resolution for the first
         day, the hour resolution for the first 3 days, and then at the day resolution
         from there on out. The `histogram` key is a list of those values.'''
-        return json.loads(self._stats([], [queue, date]))
+        return json.loads(self._stats([], [queue, date or time.time()]))
     
     def failed(self, t=None, start=0, limit=25):
         '''Failed(0, [type, [start, [limit]]])
