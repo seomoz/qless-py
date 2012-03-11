@@ -30,46 +30,6 @@ class lua(object):
             self.reload()
             return self.redis.execute_command('evalsha', self.sha, len(keys), *(keys + args))
 
-class Stats(object):
-    def __init__(self, r):
-        self._stats  = lua('stats' , r)
-        self._failed = lua('failed', r)
-        self.redis   = r
-    
-    def get(self, queue, date=None):
-        '''Stats(0, queue, date)
-        ---------------------
-        Return the current statistics for a given queue on a given date. The results 
-        are returned are a JSON blob:
-        
-            {
-                'total'    : ...,
-                'mean'     : ...,
-                'variance' : ...,
-                'histogram': [
-                    ...
-                ]
-            }
-        
-        The histogram's data points are at the second resolution for the first minute,
-        the minute resolution for the first hour, the 15-minute resolution for the first
-        day, the hour resolution for the first 3 days, and then at the day resolution
-        from there on out. The `histogram` key is a list of those values.'''
-        return json.loads(self._stats([], [queue, date or time.time()]))
-    
-    def failed(self, t=None, start=0, limit=25):
-        '''Failed(0, [type, [start, [limit]]])
-        -----------------------------------
-        If no type is provided, this returns a JSON blob of the counts of the various
-        types of failures known. If a type is provided, it will report up to `limit`
-        from `start` of the jobs affected by that issue. __Returns__ a JSON blob.'''
-        if not t:
-            return json.loads(self._failed([], []))
-        else:
-            results = json.loads(self._failed([], [t, start, limit]))
-            results['jobs'] = [Job(self.redis, **j) for j in results['jobs']]
-            return results
-
 class Config(object):
     def __init__(self, r):
         self._get  = lua('getconfig', r)
@@ -110,6 +70,7 @@ class Queue(object):
         self._pop       = lua('pop'      , self.redis)
         self._fail      = lua('fail'     , self.redis)
         self._peek      = lua('peek'     , self.redis)
+        self._stats     = lua('stats'    , self.redis)
         self._complete  = lua('complete' , self.redis)
         self._heartbeat = lua('heartbeat', self.redis)
     
@@ -194,6 +155,27 @@ class Queue(object):
         else:
             return self._complete([], [job.id, self.worker, self.name,
                 time.time(), json.dumps(job.data)]) or False
+    
+    def stats(self, date=None):
+        '''Stats(0, queue, date)
+        ---------------------
+        Return the current statistics for a given queue on a given date. The results 
+        are returned are a JSON blob:
+        
+            {
+                'total'    : ...,
+                'mean'     : ...,
+                'variance' : ...,
+                'histogram': [
+                    ...
+                ]
+            }
+        
+        The histogram's data points are at the second resolution for the first minute,
+        the minute resolution for the first hour, the 15-minute resolution for the first
+        day, the hour resolution for the first 3 days, and then at the day resolution
+        from there on out. The `histogram` key is a list of those values.'''
+        return json.loads(self._stats([], [self.name, date or time.time()]))
     
     def __len__(self):
         with self.redis.pipeline() as p:
@@ -302,11 +284,11 @@ class client(object):
         # conceivably someone might want to work with multiple
         # instances simultaneously.
         self.redis  = redis.Redis(*args, **kwargs)
-        self.stats  = Stats(self.redis)
         self.config = Config(self.redis)
         # Client's lua scripts
         self._get    = lua('get'   , self.redis)
         self._track  = lua('track' , self.redis)
+        self._failed = lua('failed', self.redis)
         self._queues = lua('queues', self.redis)
     
     def queue(self, name):
@@ -319,6 +301,19 @@ class client(object):
         results = json.loads(self._track([], []))
         results['jobs'] = [Job(self.redis, **j) for j in results['jobs']]
         return results
+    
+    def failed(self, t=None, start=0, limit=25):
+        '''Failed(0, [type, [start, [limit]]])
+        -----------------------------------
+        If no type is provided, this returns a JSON blob of the counts of the various
+        types of failures known. If a type is provided, it will report up to `limit`
+        from `start` of the jobs affected by that issue. __Returns__ a JSON blob.'''
+        if not t:
+            return json.loads(self._failed([], []))
+        else:
+            results = json.loads(self._failed([], [t, start, limit]))
+            results['jobs'] = [Job(self.redis, **j) for j in results['jobs']]
+            return results
     
     def job(self, id):
         '''Get(0, id)

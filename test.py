@@ -130,10 +130,10 @@ class TestQless(unittest.TestCase):
         jid = self.q.put({'test': 'put_failed'})
         job = self.client.job(jid)
         self.q.fail(job, 'foo', 'some message')
-        self.assertEqual(self.client.stats.failed(), {'foo':1})
+        self.assertEqual(self.client.failed(), {'foo':1})
         job.move('testing')
         self.assertEqual(len(self.q), 1)
-        self.assertEqual(self.client.stats.failed(), {})
+        self.assertEqual(self.client.failed(), {})
     
     def test_same_priority_order(self):
         # In this test, we want to make sure that jobs are popped
@@ -314,15 +314,15 @@ class TestQless(unittest.TestCase):
         #       in the failed endpoint
         #   4) Ensure that the job still has its original queue
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
-        self.assertEqual(len(self.client.stats.failed()), 0)
+        self.assertEqual(len(self.client.failed()), 0)
         jid = self.q.put({'test': 'fail_failed'})
         job = self.client.job(jid)
         self.q.fail(job, 'foo', 'Some sort of message')
         self.assertEqual(self.q.pop(), None)
-        self.assertEqual(self.client.stats.failed(), {
+        self.assertEqual(self.client.failed(), {
             'foo': 1
         })
-        results = self.client.stats.failed('foo')
+        results = self.client.failed('foo')
         self.assertEqual(results['total'], 1)
         self.assertEqual(results['jobs'][0].id, jid)
         self.assertEqual(results['jobs'][0].queue, 'testing')
@@ -336,7 +336,7 @@ class TestQless(unittest.TestCase):
         #   3) Heartbeat to job fails
         #   4) Complete job fails
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
-        self.assertEqual(len(self.client.stats.failed()), 0)
+        self.assertEqual(len(self.client.failed()), 0)
         jid = self.q.put({'test': 'pop_fail'})
         job = self.q.pop()
         self.assertNotEqual(job, None)
@@ -344,10 +344,10 @@ class TestQless(unittest.TestCase):
         self.assertEqual(len(self.q), 0)
         self.assertEqual(self.q.heartbeat(job), False)
         self.assertEqual(self.q.complete(job) , False)
-        self.assertEqual(self.client.stats.failed(), {
+        self.assertEqual(self.client.failed(), {
             'foo': 1
         })
-        results = self.client.stats.failed('foo')
+        results = self.client.failed('foo')
         self.assertEqual(results['total'], 1)
         self.assertEqual(results['jobs'][0].id, jid)
     
@@ -358,12 +358,12 @@ class TestQless(unittest.TestCase):
         #   3) Complete said job
         #   4) Attempt to fail job fails
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
-        self.assertEqual(len(self.client.stats.failed()), 0)
+        self.assertEqual(len(self.client.failed()), 0)
         jid = self.q.put({'test': 'fail_complete'})
         job = self.q.pop()
         self.q.complete(job)
         self.assertEqual(self.q.fail(job, 'foo', 'Some sort of message'), False)
-        self.assertEqual(len(self.client.stats.failed()), 0)
+        self.assertEqual(len(self.client.failed()), 0)
     
     def test_cancel(self):
         # In this test, we want to make sure that we can corretly
@@ -410,9 +410,9 @@ class TestQless(unittest.TestCase):
         jid = self.q.put({'test': 'cancel_fail'})
         job = self.client.job(jid)
         self.q.fail(job, 'foo', 'some message')
-        self.assertEqual(self.client.stats.failed(), {'foo': 1})
+        self.assertEqual(self.client.failed(), {'foo': 1})
         job.cancel()
-        self.assertEqual(self.client.stats.failed(), {})
+        self.assertEqual(self.client.failed(), {})
     
     def test_cancel_heartbeat_complete(self):
         # In this test, we want to make sure that when we cancel a
@@ -553,7 +553,7 @@ class TestQless(unittest.TestCase):
         #   2) Add a bunch of jobs to a queue
         #   3) Pop a bunch of jobs from that queue, faking out the times
         #   4) Ensure that there are now correct wait stats
-        stats = self.client.stats.get('testing', time.time())
+        stats = self.q.stats(time.time())
         self.assertEqual(stats['wait']['count'], 0)
         self.assertEqual(stats['run' ]['count'], 0)
         # This is /ugly/, but we're going to path the time function so
@@ -574,7 +574,7 @@ class TestQless(unittest.TestCase):
         # could quite possibly impact the rest of the tests
         self.assertTrue(sum(time.time() - time.time() for i in range(200)) < 0)
         # Now, make sure that we see stats for the waiting
-        stats = self.client.stats.get('testing', time.time())
+        stats = self.q.stats(time.time())
         self.assertEqual(stats['wait']['count'], 20)
         self.assertEqual(stats['wait']['mean'] , 9.5)
         # This is our expected standard deviation
@@ -594,7 +594,7 @@ class TestQless(unittest.TestCase):
         #   3) Pop those jobs
         #   4) Complete those jobs, faking out the time
         #   5) Ensure that there are now correct run stats
-        stats = self.client.stats.get('testing', time.time())
+        stats = self.q.stats(time.time())
         self.assertEqual(stats['wait']['count'], 0)
         self.assertEqual(stats['run' ]['count'], 0)
         # This is /ugly/, but we're going to path the time function so
@@ -616,7 +616,7 @@ class TestQless(unittest.TestCase):
         # could quite possibly impact the rest of the tests
         self.assertTrue(sum(time.time() - time.time() for i in range(200)) < 0)
         # Now, make sure that we see stats for the waiting
-        stats = self.client.stats.get('testing', time.time())
+        stats = self.q.stats(time.time())
         self.assertEqual(stats['run']['count'], 20)
         self.assertEqual(stats['run']['mean'] , 9.5)
         # This is our expected standard deviation
@@ -698,19 +698,19 @@ class TestQless(unittest.TestCase):
         #   3) Lose the heartbeat as many times
         #   4) Verify there are failures
         #   5) Verify the queue is empty
-        self.assertEqual(self.client.stats.failed(), {})
+        self.assertEqual(self.client.failed(), {})
         self.q.put({'test':'retries'}, retries=2)
         # Easier to lose the heartbeat lock
         self.q._hb = -10
         self.assertNotEqual(self.q.pop(), None)
-        self.assertEqual(self.client.stats.failed(), {})
+        self.assertEqual(self.client.failed(), {})
         self.assertNotEqual(self.q.pop(), None)
-        self.assertEqual(self.client.stats.failed(), {})
+        self.assertEqual(self.client.failed(), {})
         self.assertNotEqual(self.q.pop(), None)
-        self.assertEqual(self.client.stats.failed(), {})
+        self.assertEqual(self.client.failed(), {})
         # This one should do it
         self.assertEqual(self.q.pop(), None)
-        self.assertEqual(self.client.stats.failed(), {'failed-retries-testing':1})
+        self.assertEqual(self.client.failed(), {'failed-retries-testing':1})
     
     def test_retries_complete(self):
         # In this test, we want to make sure that jobs have their number
@@ -758,16 +758,16 @@ class TestQless(unittest.TestCase):
         #   5) Put that item back
         #   6) Ensure failed decremented, failures untouched
         jid = self.q.put({'test':'stats_failed'})
-        stats = self.client.stats.get('testing')
+        stats = self.q.stats()
         self.assertEqual(stats['failed'  ], 0)
         self.assertEqual(stats['failures'], 0)
         job = self.client.job(jid)
         self.q.fail(job, 'foo', 'bar')
-        stats = self.client.stats.get('testing')
+        stats = self.q.stats()
         self.assertEqual(stats['failed'  ], 1)
         self.assertEqual(stats['failures'], 1)
         job.move('testing')
-        stats = self.client.stats.get('testing')
+        stats = self.q.stats()
         self.assertEqual(stats['failed'  ], 0)
         self.assertEqual(stats['failures'], 1)
     
@@ -782,9 +782,9 @@ class TestQless(unittest.TestCase):
         jid = self.q.put({'test':'stats_retries'})
         self.q._hb = -10
         job = self.q.pop()
-        self.assertEqual(self.client.stats.get('testing')['retries'], 0)
+        self.assertEqual(self.q.stats()['retries'], 0)
         job = self.q.pop()
-        self.assertEqual(self.client.stats.get('testing')['retries'], 0)
+        self.assertEqual(self.q.stats()['retries'], 0)
     
     def test_stats_failed_original_day(self):
         # In this test, we want to verify that if we unfail a job on a
@@ -800,7 +800,7 @@ class TestQless(unittest.TestCase):
         jid = self.q.put({'test':'stats_failed_original_day'})
         job = self.client.job(jid)
         self.q.fail(job, 'foo', 'bar')
-        stats = self.client.stats.get('testing')
+        stats = self.q.stats()
         self.assertEqual(stats['failures'], 1)
         self.assertEqual(stats['failed'  ], 1)
         # Now let's fiddle with the time
@@ -809,13 +809,13 @@ class TestQless(unittest.TestCase):
         time.time = lambda: now + 86400
         job.move('testing')
         # Now check tomorrow's stats
-        today = self.client.stats.get('testing')
+        today = self.q.stats()
         self.assertEqual(today['failures'], 0)
         self.assertEqual(today['failed'  ], 0)
         # Make sure that we reset it to the old system time function!
         time.time = oldtime
         self.assertTrue(sum(time.time() - time.time() for i in range(200)) < 0)
-        yesterday = self.client.stats.get('testing')
+        yesterday = self.q.stats()
         self.assertEqual(yesterday['failures'], 1)
         self.assertEqual(yesterday['failed']  , 0)
     
