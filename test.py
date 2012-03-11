@@ -819,6 +819,187 @@ class TestQless(unittest.TestCase):
         self.assertEqual(yesterday['failures'], 1)
         self.assertEqual(yesterday['failed']  , 0)
     
+    def test_workers(self):
+        # In this test, we want to verify that when we add a job, we 
+        # then know about that worker, and that it correctly identifies
+        # the jobs it has.
+        #   1) Put a job
+        #   2) Ensure empty 'workers'
+        #   3) Pop that job
+        #   4) Ensure unempty 'workers'
+        #   5) Ensure unempty 'worker'
+        jid = self.q.put({'test':'workers'})
+        self.assertEqual(self.client.workers(), {})
+        job = self.q.pop()
+        workers = self.client.workers()
+        self.assertEqual(workers, [{
+            'name'   : self.q.worker,
+            'jobs'   : 1,
+            'stalled': 0
+        }])
+        # Not get specific worker information
+        worker = self.client.workers(self.q.worker)
+        self.assertEqual(worker['jobs']   , [jid])
+        self.assertEqual(worker['stalled'], {})
+    
+    def test_workers_cancel(self):
+        # In this test, we want to verify that when a job is canceled,
+        # that it is removed from the list of jobs associated with a worker
+        #   1) Put a job
+        #   2) Pop that job
+        #   3) Ensure 'workers' and 'worker' know about it
+        #   4) Cancel job
+        #   5) Ensure 'workers' and 'worker' reflect that
+        jid = self.q.put({'test':'workers_cancel'})
+        job = self.q.pop()
+        self.assertEqual(self.client.workers(), [{
+            'name'   : self.q.worker,
+            'jobs'   : 1,
+            'stalled': 0
+        }])
+        self.assertEqual(self.client.workers(self.q.worker), {
+            'jobs'   : [jid],
+            'stalled': {}
+        })
+        # Now cancel the job
+        job.cancel()
+        self.assertEqual(self.client.workers(), [{
+            'name'   : self.q.worker,
+            'jobs'   : 0,
+            'stalled': 0
+        }])
+        self.assertEqual(self.client.workers(self.q.worker), {
+            'jobs'   : {},
+            'stalled': {}
+        })
+    
+    def test_workers_lost_lock(self):
+        # In this test, we want to verify that 'workers' and 'worker'
+        # correctly identify that a job is stalled, and that when that
+        # job is taken from the lost lock, that it's no longer listed
+        # as stalled under the original worker. Also, that workers are
+        # listed in order of recency of contact
+        #   1) Put a job
+        #   2) Pop a job, with negative heartbeat
+        #   3) Ensure 'workers' and 'worker' show it as stalled
+        #   4) Pop the job with a different worker
+        #   5) Ensure 'workers' and 'worker' reflect that
+        jid = self.q.put({'test':'workers_lost_lock'})
+        self.q._hb = -10
+        job = self.q.pop()
+        self.assertEqual(self.client.workers(), [{
+            'name'   : self.q.worker,
+            'jobs'   : 0,
+            'stalled': 1
+        }])
+        self.assertEqual(self.client.workers(self.q.worker), {
+            'jobs'   : {},
+            'stalled': [jid]
+        })
+        # Now, let's pop it with a different worker
+        job = self.a.pop()
+        self.assertEqual(self.client.workers(), [{
+            'name'   : self.a.worker,
+            'jobs'   : 1,
+            'stalled': 0
+        }, {
+            'name'   : self.q.worker,
+            'jobs'   : 0,
+            'stalled': 0
+        }])
+        self.assertEqual(self.client.workers(self.q.worker), {
+            'jobs'   : {},
+            'stalled': {}
+        })
+    
+    def test_workers_fail(self):
+        # In this test, we want to make sure that when we fail a job,
+        # its reflected correctly in 'workers' and 'worker'
+        #   1) Put a job
+        #   2) Pop job, check 'workers', 'worker'
+        #   3) Fail that job
+        #   4) Check 'workers', 'worker'
+        jid = self.q.put({'test':'workers_fail'})
+        job = self.q.pop()
+        self.assertEqual(self.client.workers(), [{
+            'name'   : self.q.worker,
+            'jobs'   : 1,
+            'stalled': 0
+        }])
+        self.assertEqual(self.client.workers(self.q.worker), {
+            'jobs'   : [jid],
+            'stalled': {}
+        })
+        # Now, let's fail it
+        self.q.fail(job, 'foo', 'bar')
+        self.assertEqual(self.client.workers(), [{
+            'name'   : self.q.worker,
+            'jobs'   : 0,
+            'stalled': 0
+        }])
+        self.assertEqual(self.client.workers(self.q.worker), {
+            'jobs'   : {},
+            'stalled': {}
+        })
+    
+    def test_workers_complete(self):
+        # In this test, we want to make sure that when we complete a job,
+        # it's reflected correctly in 'workers' and 'worker'
+        #   1) Put a job
+        #   2) Pop a job, check 'workers', 'worker'
+        #   3) Complete job, check 'workers', 'worker'
+        jid = self.q.put({'test':'workers_complete'})
+        job = self.q.pop()
+        self.assertEqual(self.client.workers(), [{
+            'name'   : self.q.worker,
+            'jobs'   : 1,
+            'stalled': 0
+        }])
+        self.assertEqual(self.client.workers(self.q.worker), {
+            'jobs'   : [jid],
+            'stalled': {}
+        })
+        # Now complete it
+        self.q.complete(job)
+        self.assertEqual(self.client.workers(), [{
+            'name'   : self.q.worker,
+            'jobs'   : 0,
+            'stalled': 0
+        }])
+        self.assertEqual(self.client.workers(self.q.worker), {
+            'jobs'   : {},
+            'stalled': {}
+        })
+    
+    def test_workers_reput(self):
+        # Make sure that if we move a job from one queue to another, that 
+        # the job is no longer listed as one of the jobs that the worker
+        # has.
+        #   1) Put a job
+        #   2) Pop job, check 'workers', 'worker'
+        #   3) Move job, check 'workers', 'worker'
+        jid = self.q.put({'test':'workers_reput'})
+        job = self.q.pop()
+        self.assertEqual(self.client.workers(), [{
+            'name'   : self.q.worker,
+            'jobs'   : 1,
+            'stalled': 0
+        }])
+        self.assertEqual(self.client.workers(self.q.worker), {
+            'jobs'   : [jid],
+            'stalled': {}
+        })
+        job.move('other')
+        self.assertEqual(self.client.workers(), [{
+            'name'   : self.q.worker,
+            'jobs'   : 0,
+            'stalled': 0
+        }])
+        self.assertEqual(self.client.workers(self.q.worker), {
+            'jobs'   : {},
+            'stalled': {}
+        })
+    
     # ==================================================================
     # In these tests, we want to ensure that if we don't provide enough
     # or correctly-formatted arguments to the lua scripts, that they'll

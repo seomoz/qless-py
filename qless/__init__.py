@@ -286,10 +286,11 @@ class client(object):
         self.redis  = redis.Redis(*args, **kwargs)
         self.config = Config(self.redis)
         # Client's lua scripts
-        self._get    = lua('get'   , self.redis)
-        self._track  = lua('track' , self.redis)
-        self._failed = lua('failed', self.redis)
-        self._queues = lua('queues', self.redis)
+        self._get     = lua('get'    , self.redis)
+        self._track   = lua('track'  , self.redis)
+        self._failed  = lua('failed' , self.redis)
+        self._queues  = lua('queues' , self.redis)
+        self._workers = lua('workers', self.redis)
     
     def queue(self, name):
         return Queue(name, self.redis, self.worker)
@@ -314,6 +315,11 @@ class client(object):
             results = json.loads(self._failed([], [t, start, limit]))
             results['jobs'] = [Job(self.redis, **j) for j in results['jobs']]
             return results
+    
+    def workers(self, worker=None):
+        if worker:
+            return json.loads(self._workers([], [time.time(), worker]))
+        return json.loads(self._workers([], [time.time()]))
     
     def job(self, id):
         '''Get(0, id)
