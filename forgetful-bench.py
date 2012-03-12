@@ -11,8 +11,12 @@ parser.add_argument('--jobs', dest='numJobs', default=1000, type=int,
     help='How many jobs to schedule for the test')
 parser.add_argument('--workers', dest='numWorkers', default=10, type=int,
     help='How many workers should do the work')
+parser.add_argument('--retries', dest='retries', default=5, type=int,
+    help='How many retries to give each job')
 parser.add_argument('--quiet', dest='verbose', default=True, action='store_false',
     help='Reduce all the output')
+parser.add_argument('--no-flush', dest='flush', default=True, action='store_false',
+    help='Don\'t flush Redis after running')
 
 args = parser.parse_args()
 
@@ -70,7 +74,7 @@ cpuBefore = client.redis.info()['used_cpu_user'] + client.redis.info()['used_cpu
 putTime = -time.time()
 # Alright, let's make a bunch of jobs
 testing = client.queue('testing')
-jids = [testing.put({'test': 'benchmark', 'count': c}) for c in range(args.numJobs)]
+jids = [testing.put({'test': 'benchmark', 'count': c}, retries=args.retries) for c in range(args.numJobs)]
 putTime += time.time()
 
 # This is how long it took to run the workers
@@ -138,5 +142,6 @@ print 'Redis Lua: %s'  % info['used_memory_lua']
 print 'Redis CPU: %fs' % (info['used_cpu_user'] + info['used_cpu_sys'] - cpuBefore)
 
 # Flush the database when we're done
-print 'Flushing'
-client.redis.flushdb()
+if args.flush:
+    print 'Flushing'
+    client.redis.flushdb()
