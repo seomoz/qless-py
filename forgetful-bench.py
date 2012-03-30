@@ -7,6 +7,12 @@ parser = argparse.ArgumentParser(description='Run forgetful workers on contrived
 
 parser.add_argument('--forgetfulness', dest='forgetfulness', default=0.1, type=float,
     help='What portion of jobs should be randomly dropped by workers')
+parser.add_argument('--host', dest='host', default='localhost',
+    help='The host to connect to as the Redis server')
+parser.add_argument('--port', dest='port', default=6379, type=int,
+    help='The port to connect on as the Redis server')
+parser.add_argument('--stages', dest='stages', default=1, type=int,
+    help='How many times to requeue jobs')
 parser.add_argument('--jobs', dest='numJobs', default=1000, type=int,
     help='How many jobs to schedule for the test')
 parser.add_argument('--workers', dest='numWorkers', default=10, type=int,
@@ -38,7 +44,7 @@ else:
     logger.setLevel(logging.WARN)
 
 # Our qless client
-client = qless.client()
+client = qless.client(host=args.host, port=args.port)
 
 class ForgetfulWorker(threading.Thread):
     def __init__(self, *args, **kwargs):
@@ -61,7 +67,11 @@ class ForgetfulWorker(threading.Thread):
                 continue
             else:
                 logger.debug('Completing job!')
-                self.q.complete(job)
+                job['stages'] -= 1
+                if job['stages'] > 0:
+                    self.q.complete(job, 'testing')
+                else:
+                    self.q.complete(job)
 
 # Make sure that the redis instance is empty first
 if len(client.redis.keys('*')):
@@ -74,7 +84,7 @@ cpuBefore = client.redis.info()['used_cpu_user'] + client.redis.info()['used_cpu
 putTime = -time.time()
 # Alright, let's make a bunch of jobs
 testing = client.queue('testing')
-jids = [testing.put({'test': 'benchmark', 'count': c}, retries=args.retries) for c in range(args.numJobs)]
+jids = [testing.put({'test': 'benchmark', 'count': c, 'stages':args.stages}, retries=args.retries) for c in range(args.numJobs)]
 putTime += time.time()
 
 # This is how long it took to run the workers
