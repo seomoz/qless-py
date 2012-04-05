@@ -235,7 +235,7 @@ class Job(object):
     def __repr__(self):
         return '<qless:Job %s>' % self.id
     
-    def remaining(self):
+    def ttl(self):
         '''How long until this expires, in seconds'''
         return time.time() - self.expires
     
@@ -295,7 +295,9 @@ class client(object):
     def queue(self, name):
         return Queue(name, self.redis, self.worker)
     
-    def queues(self):
+    def queues(self, queue=None):
+        if queue:
+            return json.loads(self._queues([], [time.time(), queue]))
         return json.loads(self._queues([], [time.time()]))
     
     def tracked(self):

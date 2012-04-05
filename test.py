@@ -272,6 +272,17 @@ class TestQless(unittest.TestCase):
         self.assertTrue(isinstance(self.a.heartbeat(ajob), float))
         self.assertTrue(self.a.heartbeat(ajob) >= time.time())
     
+    def test_heartbeat_state(self):
+        # In this test, we want to make sure that we cannot heartbeat
+        # a job that has not yet been popped
+        #   1) Put a job
+        #   2) DO NOT pop that job
+        #   3) Ensure we cannot heartbeat that job
+        self.assertEqual(len(self.q), 0, 'Start with an empty queue')
+        jid = self.q.put({'test': 'heartbeat_state'})
+        job = self.client.job(jid)
+        self.assertEqual(self.q.heartbeat(job), False)
+    
     def test_peek_pop_empty(self):
         # Make sure that we can safely pop from an empty queue
         #   1) Make sure the queue is empty
@@ -413,22 +424,6 @@ class TestQless(unittest.TestCase):
         self.assertEqual(self.client.failed(), {'foo': 1})
         job.cancel()
         self.assertEqual(self.client.failed(), {})
-    
-    def test_cancel_heartbeat_complete(self):
-        # In this test, we want to make sure that when we cancel a
-        # job, that we can no longer heartbeat or complete a job
-        #   1) Put a job
-        #   2) Pop a job
-        #   3) Cancel said job
-        #   4) Attempts to complete it should fail
-        #   5) Attempts to heartbeat it should fail
-        self.assertEqual(len(self.q), 0, 'Start with an empty queue')
-        jid = self.q.put({'test': 'cancel_heartbeat_complete'})
-        job = self.q.pop()
-        job.cancel()
-        self.assertEqual(len(self.q), 0)
-        self.assertEqual(self.q.heartbeat(job), False)
-        self.assertEqual(self.q.complete(job) , False)
         
     def test_complete(self):
         # In this test, we want to make sure that a job that has been
@@ -647,19 +642,26 @@ class TestQless(unittest.TestCase):
             'scheduled': 1
         }
         self.assertEqual(self.client.queues(), [expected])
+        self.assertEqual(self.client.queues("testing"), expected)
+        
         self.q.put({'test': 'queues'})
         expected['waiting'] += 1
         self.assertEqual(self.client.queues(), [expected])
-        self.q.put({'test': 'queues'})
+        self.assertEqual(self.client.queues("testing"), expected)
+        
         job = self.q.pop()
+        expected['waiting'] -= 1
         expected['running'] += 1
         self.assertEqual(self.client.queues(), [expected])
+        self.assertEqual(self.client.queues("testing"), expected)
+        
         # Now we'll have to mess up our heartbeat to make this work
         self.q.put({'test': 'queues'})
         self.q._hb = -60
         job = self.q.pop()
         expected['stalled'] += 1
         self.assertEqual(self.client.queues(), [expected])
+        self.assertEqual(self.client.queues("testing"), expected)
     
     def test_track(self):
         # In this test, we want to make sure that tracking works as expected.
@@ -784,7 +786,7 @@ class TestQless(unittest.TestCase):
         job = self.q.pop()
         self.assertEqual(self.q.stats()['retries'], 0)
         job = self.q.pop()
-        self.assertEqual(self.q.stats()['retries'], 0)
+        self.assertEqual(self.q.stats()['retries'], 1)
     
     def test_stats_failed_original_day(self):
         # In this test, we want to verify that if we unfail a job on a
@@ -1093,13 +1095,13 @@ class TestQless(unittest.TestCase):
         # Passing in too many keys
         self.assertRaises(Exception, peek, *(['foo', 'bar'], [1, 12345]))
         # Missing count
-        self.assertRaises(Exception, peek, *(['foo', []]))
+        self.assertRaises(Exception, peek, *(['foo'], []))
         # Malformed count
-        self.assertRaises(Exception, peek, *(['foo', ['howdy']]))
+        self.assertRaises(Exception, peek, *(['foo'], ['howdy']))
         # Missing now
-        self.assertRaises(Exception, peek, *(['foo', [1]]))
+        self.assertRaises(Exception, peek, *(['foo'], [1]))
         # Malformed now
-        self.assertRaises(Exception, peek, *(['foo', [1, 'howdy']]))
+        self.assertRaises(Exception, peek, *(['foo'], [1, 'howdy']))
     
     def test_lua_pop(self):
         pop = qless.lua('pop', self.redis)
