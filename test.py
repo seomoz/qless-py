@@ -23,12 +23,12 @@ class TestQless(unittest.TestCase):
         self.q = self.client.queue('testing')
         
         # This represents worker 'a'
-        self.a = self.client.queue('testing')
-        self.a.worker = 'worker-a'
-        # This represens worker b
-        self.b = self.client.queue('testing')
-        self.b.worker = 'worker-b'
-        
+        tmp = qless.client(); tmp.worker = 'worker-a'
+        self.a = tmp.queue('testing')
+        # This represents worker b
+        tmp = qless.client(); tmp.worker = 'worker-b'
+        self.b = tmp.queue('testing')
+                
         # This is just a second queue
         self.other = self.client.queue('other')
     
@@ -129,7 +129,7 @@ class TestQless(unittest.TestCase):
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
         jid = self.q.put({'test': 'put_failed'})
         job = self.client.job(jid)
-        self.q.fail(job, 'foo', 'some message')
+        job.fail('foo', 'some message')
         self.assertEqual(self.client.failed(), {'foo':1})
         job.move('testing')
         self.assertEqual(len(self.q), 1)
@@ -231,7 +231,7 @@ class TestQless(unittest.TestCase):
         self.assertNotEqual(job, None)
         # Now move it
         job.move('other')
-        self.assertEqual(self.q.heartbeat(job), False)
+        self.assertEqual(job.heartbeat(), False)
     
     def test_move_non_destructive(self):
         # In this test, we want to verify that if we move a job
@@ -269,8 +269,8 @@ class TestQless(unittest.TestCase):
         self.assertNotEqual(ajob, None)
         bjob = self.b.pop()
         self.assertEqual(bjob, None)
-        self.assertTrue(isinstance(self.a.heartbeat(ajob), float))
-        self.assertTrue(self.a.heartbeat(ajob) >= time.time())
+        self.assertTrue(isinstance(ajob.heartbeat(), float))
+        self.assertTrue(ajob.heartbeat() >= time.time())
     
     def test_heartbeat_state(self):
         # In this test, we want to make sure that we cannot heartbeat
@@ -281,7 +281,7 @@ class TestQless(unittest.TestCase):
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
         jid = self.q.put({'test': 'heartbeat_state'})
         job = self.client.job(jid)
-        self.assertEqual(self.q.heartbeat(job), False)
+        self.assertEqual(job.heartbeat(), False)
     
     def test_peek_pop_empty(self):
         # Make sure that we can safely pop from an empty queue
@@ -303,8 +303,7 @@ class TestQless(unittest.TestCase):
         #   5) Both clean up
         jid = self.q.put({'test': 'locks'})
         # Reset our heartbeat for both A and B
-        self.a._hb = -10
-        self.b._hb = -10
+        self.client.config.set('heartbeat', -10)
         # Make sure a gets a job
         ajob = self.a.pop()
         self.assertNotEqual(ajob, None)
@@ -312,9 +311,9 @@ class TestQless(unittest.TestCase):
         bjob = self.b.pop()
         self.assertNotEqual(bjob, None)
         self.assertEqual(ajob.id, bjob.id)
-        self.assertTrue(isinstance(self.b.heartbeat(bjob), float))
-        self.assertTrue((self.b.heartbeat(bjob) + 11) >= time.time())
-        self.assertEqual(self.a.heartbeat(ajob), False)
+        self.assertTrue(isinstance(bjob.heartbeat(), float))
+        self.assertTrue((bjob.heartbeat() + 11) >= time.time())
+        self.assertEqual(ajob.heartbeat(), False)
     
     def test_fail_failed(self):
         # In this test, we want to make sure that we can correctly 
@@ -328,7 +327,7 @@ class TestQless(unittest.TestCase):
         self.assertEqual(len(self.client.failed()), 0)
         jid = self.q.put({'test': 'fail_failed'})
         job = self.client.job(jid)
-        self.q.fail(job, 'foo', 'Some sort of message')
+        job.fail('foo', 'Some sort of message')
         self.assertEqual(self.q.pop(), None)
         self.assertEqual(self.client.failed(), {
             'foo': 1
@@ -351,10 +350,10 @@ class TestQless(unittest.TestCase):
         jid = self.q.put({'test': 'pop_fail'})
         job = self.q.pop()
         self.assertNotEqual(job, None)
-        self.q.fail(job, 'foo', 'Some sort of message')
+        job.fail('foo', 'Some sort of message')
         self.assertEqual(len(self.q), 0)
-        self.assertEqual(self.q.heartbeat(job), False)
-        self.assertEqual(self.q.complete(job) , False)
+        self.assertEqual(job.heartbeat(), False)
+        self.assertEqual(job.complete() , False)
         self.assertEqual(self.client.failed(), {
             'foo': 1
         })
@@ -372,8 +371,8 @@ class TestQless(unittest.TestCase):
         self.assertEqual(len(self.client.failed()), 0)
         jid = self.q.put({'test': 'fail_complete'})
         job = self.q.pop()
-        self.q.complete(job)
-        self.assertEqual(self.q.fail(job, 'foo', 'Some sort of message'), False)
+        job.complete()
+        self.assertEqual(job.fail('foo', 'Some sort of message'), False)
         self.assertEqual(len(self.client.failed()), 0)
     
     def test_cancel(self):
@@ -405,8 +404,8 @@ class TestQless(unittest.TestCase):
         job = self.q.pop()
         job.cancel()
         self.assertEqual(len(self.q), 0)
-        self.assertEqual(self.q.heartbeat(job), False)
-        self.assertEqual(self.q.complete(job) , False)
+        self.assertEqual(job.heartbeat(), False)
+        self.assertEqual(job.complete() , False)
         self.assertEqual(self.client.job(jid), None)
     
     def test_cancel_fail(self):
@@ -420,7 +419,7 @@ class TestQless(unittest.TestCase):
         #   5) Make sure that we don't see failure stats
         jid = self.q.put({'test': 'cancel_fail'})
         job = self.client.job(jid)
-        self.q.fail(job, 'foo', 'some message')
+        job.fail('foo', 'some message')
         self.assertEqual(self.client.failed(), {'foo': 1})
         job.cancel()
         self.assertEqual(self.client.failed(), {})
@@ -438,7 +437,7 @@ class TestQless(unittest.TestCase):
         jid = self.q.put({'test': 'complete'})
         job = self.q.pop()
         self.assertNotEqual(job, None)
-        self.assertEqual(self.q.complete(job), 'complete')
+        self.assertEqual(job.complete(), 'complete')
         job = self.client.job(jid)
         self.assertEqual(math.floor(job.history[-1]['done']), math.floor(time.time()))
         self.assertEqual(job.state , 'complete')
@@ -460,7 +459,7 @@ class TestQless(unittest.TestCase):
         jid = self.q.put({'test': 'complete_advance'})
         job = self.q.pop()
         self.assertNotEqual(job, None)
-        self.assertEqual(self.q.complete(job, next='testing'), 'waiting')
+        self.assertEqual(job.complete('testing'), 'waiting')
         job = self.client.job(jid)
         self.assertEqual(len(job.history), 2)
         self.assertEqual(math.floor(job.history[-2]['done']), math.floor(time.time()))
@@ -480,13 +479,13 @@ class TestQless(unittest.TestCase):
         #   4) Second worker tries to complete it, should succeed
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
         jid = self.q.put({'test': 'complete_fail'})
-        self.a._hb = -10
+        self.client.config.set('heartbeat', -10)
         ajob = self.a.pop()
         self.assertNotEqual(ajob, None)
         bjob = self.b.pop()
         self.assertNotEqual(bjob, None)
-        self.assertEqual(self.a.complete(ajob), False)
-        self.assertEqual(self.b.complete(bjob), 'complete')
+        self.assertEqual(ajob.complete(), False)
+        self.assertEqual(bjob.complete(), 'complete')
         job = self.client.job(jid)
         self.assertEqual(math.floor(job.history[-1]['done']), math.floor(time.time()))
         self.assertEqual(job.state , 'complete')
@@ -503,7 +502,7 @@ class TestQless(unittest.TestCase):
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
         jid = self.q.put({'test': 'complete_fail'})
         job = self.client.job(jid)
-        self.assertEqual(self.q.complete(job, next='testing'), False)
+        self.assertEqual(job.complete('testing'), False)
     
     def test_job_time_expiration(self):
         # In this test, we want to make sure that we honor our job
@@ -518,8 +517,7 @@ class TestQless(unittest.TestCase):
         self.client.config.set('jobs-history', -1)
         jids = [self.q.put({'test': 'job_time_experiation', 'count':c}) for c in range(20)]
         for c in range(len(jids)):
-            job = self.q.pop()
-            self.q.complete(job)
+            self.q.pop().complete()
         self.assertEqual(self.redis.zcard('ql:completed'), 0)
         self.assertEqual(len(self.redis.keys('ql:j:*')), 0)
     
@@ -536,8 +534,7 @@ class TestQless(unittest.TestCase):
         self.client.config.set('jobs-history-count', 10)
         jids = [self.q.put({'test': 'job_count_expiration', 'count':c}) for c in range(20)]
         for c in range(len(jids)):
-            job = self.q.pop()
-            self.q.complete(job)
+            self.q.pop().complete()
         self.assertEqual(self.redis.zcard('ql:completed'), 10)
         self.assertEqual(len(self.redis.keys('ql:j:*')), 10)
     
@@ -602,8 +599,7 @@ class TestQless(unittest.TestCase):
         self.assertEqual(len(jobs), 20)
         for i in range(len(jobs)):
             time.time = lambda: (i + now)
-            job = jobs[i]
-            self.q.complete(job)
+            jobs[i].complete()
         # Make sure that we reset it to the old system time function!
         time.time = oldtime
         # Let's actually go ahead an add a test to make sure that the
@@ -657,7 +653,7 @@ class TestQless(unittest.TestCase):
         
         # Now we'll have to mess up our heartbeat to make this work
         self.q.put({'test': 'queues'})
-        self.q._hb = -60
+        self.client.config.set('heartbeat', -10)
         job = self.q.pop()
         expected['stalled'] += 1
         self.assertEqual(self.client.queues(), [expected])
@@ -703,7 +699,7 @@ class TestQless(unittest.TestCase):
         self.assertEqual(self.client.failed(), {})
         self.q.put({'test':'retries'}, retries=2)
         # Easier to lose the heartbeat lock
-        self.q._hb = -10
+        self.client.config.set('heartbeat', -10)
         self.assertNotEqual(self.q.pop(), None)
         self.assertEqual(self.client.failed(), {})
         self.assertNotEqual(self.q.pop(), None)
@@ -723,12 +719,12 @@ class TestQless(unittest.TestCase):
         #   4) Complete the job
         #   5) Get job, make sure it has 2 remaining
         jid = self.q.put({'test':'retries_complete'}, retries=2)
-        self.q._hb = -10
+        self.client.config.set('heartbeat', -10)
         job = self.q.pop()
         self.assertNotEqual(job, None)
         job = self.q.pop()
         self.assertEqual(job.remaining, 1)
-        self.q.complete(job)
+        job.complete()
         job = self.client.job(jid)
         self.assertEqual(job.remaining, 2)
     
@@ -741,7 +737,7 @@ class TestQless(unittest.TestCase):
         #   4) Re-put the job in the queue with job.move
         #   5) Get job, make sure it has 2 remaining
         jid = self.q.put({'test':'retries_put'}, retries=2)
-        self.q._hb = -10
+        self.client.config.set('heartbeat', -10)
         job = self.q.pop()
         self.assertNotEqual(job, None)
         job = self.q.pop()
@@ -764,7 +760,7 @@ class TestQless(unittest.TestCase):
         self.assertEqual(stats['failed'  ], 0)
         self.assertEqual(stats['failures'], 0)
         job = self.client.job(jid)
-        self.q.fail(job, 'foo', 'bar')
+        job.fail('foo', 'bar')
         stats = self.q.stats()
         self.assertEqual(stats['failed'  ], 1)
         self.assertEqual(stats['failures'], 1)
@@ -782,7 +778,7 @@ class TestQless(unittest.TestCase):
         #   4) Pop job,
         #   5) Ensure one retry in stats
         jid = self.q.put({'test':'stats_retries'})
-        self.q._hb = -10
+        self.client.config.set('heartbeat', -10)
         job = self.q.pop()
         self.assertEqual(self.q.stats()['retries'], 0)
         job = self.q.pop()
@@ -801,7 +797,7 @@ class TestQless(unittest.TestCase):
         #   6) Check 'yesterdays' stats, check failed = 0, failures = 1
         jid = self.q.put({'test':'stats_failed_original_day'})
         job = self.client.job(jid)
-        self.q.fail(job, 'foo', 'bar')
+        job.fail('foo', 'bar')
         stats = self.q.stats()
         self.assertEqual(stats['failures'], 1)
         self.assertEqual(stats['failed'  ], 1)
@@ -887,7 +883,7 @@ class TestQless(unittest.TestCase):
         #   4) Pop the job with a different worker
         #   5) Ensure 'workers' and 'worker' reflect that
         jid = self.q.put({'test':'workers_lost_lock'})
-        self.q._hb = -10
+        self.client.config.set('heartbeat', -10)
         job = self.q.pop()
         self.assertEqual(self.client.workers(), [{
             'name'   : self.q.worker,
@@ -899,6 +895,7 @@ class TestQless(unittest.TestCase):
             'stalled': [jid]
         })
         # Now, let's pop it with a different worker
+        self.client.config.set('heartbeat')
         job = self.a.pop()
         self.assertEqual(self.client.workers(), [{
             'name'   : self.a.worker,
@@ -933,7 +930,7 @@ class TestQless(unittest.TestCase):
             'stalled': {}
         })
         # Now, let's fail it
-        self.q.fail(job, 'foo', 'bar')
+        job.fail('foo', 'bar')
         self.assertEqual(self.client.workers(), [{
             'name'   : self.q.worker,
             'jobs'   : 0,
@@ -962,7 +959,7 @@ class TestQless(unittest.TestCase):
             'stalled': {}
         })
         # Now complete it
-        self.q.complete(job)
+        job.complete()
         self.assertEqual(self.client.workers(), [{
             'name'   : self.q.worker,
             'jobs'   : 0,
@@ -1119,10 +1116,6 @@ class TestQless(unittest.TestCase):
         self.assertRaises(Exception, pop, *(['foo'], ['worker1', 1]))
         # Malformed now
         self.assertRaises(Exception, pop, *(['foo'], ['worker1', 1, 'howdy']))
-        # Missing expires
-        self.assertRaises(Exception, pop, *(['foo'], ['worker1', 1, 12345]))
-        # Malformed expires
-        self.assertRaises(Exception, pop, *(['foo'], ['worker1', 1, 12345, 'howdy']))
     
     def test_lua_put(self):
         put = qless.lua('put', self.redis)

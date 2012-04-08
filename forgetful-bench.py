@@ -47,11 +47,12 @@ else:
 client = qless.client(host=args.host, port=args.port)
 
 class ForgetfulWorker(threading.Thread):
-    def __init__(self, *args, **kwargs):
-        threading.Thread.__init__(self, *args, **kwargs)
-        self.q = client.queue('testing')
-        self.q._hb = 1
-        self.q.worker += '-' + self.getName() 
+    def __init__(self, *a, **kw):
+        threading.Thread.__init__(self, *a, **kw)
+        # This is to fake out thread-level workers
+        tmp = qless.client(host=args.host, port=args.port)
+        tmp.worker += '-' + self.getName()
+        self.q = tmp.queue('testing')
     
     def run(self):
         while len(self.q):
@@ -69,15 +70,16 @@ class ForgetfulWorker(threading.Thread):
                 logger.debug('Completing job!')
                 job['stages'] -= 1
                 if job['stages'] > 0:
-                    self.q.complete(job, 'testing')
+                    job.complete('testing')
                 else:
-                    self.q.complete(job)
+                    job.complete()
 
 # Make sure that the redis instance is empty first
 if len(client.redis.keys('*')):
     print 'Must begin on an empty Redis instance'
     exit(1)
 
+client.config.set('heartbeat', 1)
 # This is how much CPU Redis had used /before/
 cpuBefore = client.redis.info()['used_cpu_user'] + client.redis.info()['used_cpu_sys']
 # This is how long it took to add the jobs
@@ -98,28 +100,6 @@ for worker in workers:
     worker.join()
 
 workTime += time.time()
-
-import unittest
-class TestQlessBench(unittest.TestCase):
-    def test_stats(self):
-        # In this test, we want to make sure that the stats we get out of 
-        # the system seem in accordance with what we'd expect. Ensure:
-        #   1) Completed all of the jobs
-        #   2) Non-zero mean, non-zero std deviation
-        #   3) Wait stats for all jobs
-        #   4) Non-zero 
-        stats = client.stats.get('testing', time.time())
-        self.assertEqual(stats['run']['count'], args.numJobs)
-        self.assertTrue( stats['run']['mean' ], 0)
-        self.assertTrue( stats['run']['std'  ], 0)
-        # We may want to ensure that it's within certain expectation
-        # values based on the failure rate
-        self.assertTrue(stats['wait']['count'] > args.numJobs)
-        self.assertTrue(stats['wait']['mean' ] > 0)
-        self.assertTrue(stats['wait']['std'  ] > 0)
-
-# This needs some work
-#unittest.main(exit=False)
 
 def histo(l):
     count = sum(l)

@@ -57,16 +57,16 @@ long you have left:
 	# When I have to heartbeat / complete it by (seconds since epoch)
 	job.expires
 	# How long until it expires
-	job.remaining()
+	job.ttl()
 
 If your lease on the job will expire before you have a chance to complete it, then
 you should heartbeat it to make sure that no other worker gets access to it. Or, if
 you are done, you should complete it so that the job can move on:
 
 	# I call stay-offsies!
-	queue.heartbeat(job)
+	job.heartbeat()
 	# I'm done!
-	queue.complete(job)
+	job.complete()
 
 Configuration
 =============
