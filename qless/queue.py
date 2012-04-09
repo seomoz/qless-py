@@ -26,14 +26,19 @@ class Queue(object):
         # a JSON array of the tags associated with the instance and the `valid after`
         # argument should be in how many seconds the instance should be considered 
         # actionable.'''
+        
+        if not isinstance(data, Job):
+            data = Job(data, priority=priority, tags=tags, delay=delay, retries=retries)
+        
         return self.client._put([self.name], [
-            uuid.uuid1().hex,
-            json.dumps(data),
+            data.id,
+            data.type,
+            json.dumps(data.data),
             time.time(),
-            priority or 0,
-            json.dumps(tags or []),
-            delay or 0,
-            retries or 5
+            data.priority,
+            json.dumps(data.tags),
+            data.delay,
+            data.retries
         ])
     
     def pop(self, count=None):
@@ -42,7 +47,7 @@ class Queue(object):
         Passing in the queue from which to pull items, the current time, when the locks
         for these returned items should expire, and the number of items to be popped
         off.'''
-        results = [Job(self.client, **json.loads(j)) for j in self.client._pop([self.name], [self.worker, count or 1, time.time()])]
+        results = [Job.parse(self.client, **json.loads(j)) for j in self.client._pop([self.name], [self.worker, count or 1, time.time()])]
         if count == None:
             return (len(results) and results[0]) or None
         return results
@@ -52,7 +57,7 @@ class Queue(object):
         --------------------------
         Similar to the `Pop` command, except that it merely peeks at the next items
         in the queue.'''
-        results = [Job(self.client, **json.loads(r)) for r in self.client._peek([self.name], [count or 1, time.time()])]
+        results = [Job.parse(self.client, **json.loads(r)) for r in self.client._peek([self.name], [count or 1, time.time()])]
         if count == None:
             return (len(results) and results[0]) or None
         return results
@@ -77,6 +82,15 @@ class Queue(object):
         day, the hour resolution for the first 3 days, and then at the day resolution
         from there on out. The `histogram` key is a list of those values.'''
         return json.loads(self.client._stats([], [self.name, date or time.time()]))
+    
+    def running(self):
+        return self.client._jobs([], ['running', time.time(), self.name])
+    
+    def stalled(self):
+        return self.client._jobs([], ['stalled', time.time(), self.name])
+    
+    def scheduled(self):
+        return self.client._jobs([], ['scheduled', time.time(), self.name])
     
     def __len__(self):
         with self.client.redis.pipeline() as p:

@@ -1,26 +1,43 @@
 #! /usr/bin/env python
 
+import uuid
 import time
+import traceback
 import simplejson as json
 
 # The Job class
 class Job(object):
-    def __init__(self, client, id, data, priority, tags, worker, expires, state, queue, remaining, retries, failure={}, history=[]):
+    @staticmethod
+    def parse(client, id, data, priority, tags, worker, expires, state, queue, remaining, retries, failure={}, history=[], **kwargs):
+        # Alright, here's the unpleasant bit about trying to find
+        # the appropriate class and instantiate it accordingly.
+        name = kwargs.get('type', 'qless.job.Job')
+        mod = __import__(name.rpartition('.')[0])
+        mod = getattr(mod, name.rpartition('.')[2])
+        # components = name.split('.')
+        # for comp in components[1:]:
+        #     print 'Getting ' + comp
+        #     mod = getattr(mod, comp)
+        job = mod(data, id, priority, tags, 0, retries)
         # The redis instance this job is associated with
-        self.client    = client
-        # The actual meat and potatoes of the job
-        self.id        = id
-        self.data      = data or {}
-        self.priority  = priority
-        self.tags      = tags or []
-        self.worker    = worker
-        self.expires   = expires
-        self.state     = state
-        self.queue     = queue
-        self.retries   = retries
-        self.remaining = remaining
-        self.failure   = failure or {}
-        self.history   = history or []
+        job.client    = client
+        job.worker    = worker
+        job.expires   = expires
+        job.state     = state
+        job.queue     = queue
+        job.remaining = remaining
+        job.failure   = failure or {}
+        job.history   = history or []
+        return job
+    
+    def __init__(self, data, id=None, priority=None, tags=None, delay=None, retries=None):
+        self.data     = data
+        self.id       = id or uuid.uuid1().hex
+        self.priority = priority or 0
+        self.tags     = tags or []
+        self.delay    = delay or 0
+        self.retries  = retries or 5
+        self.type     = self.__module__ + '.' + self.__class__.__name__
     
     def __getitem__(self, key):
         return self.data.get(key)
@@ -49,7 +66,20 @@ class Job(object):
         return s
     
     def __repr__(self):
-        return '<qless:Job %s>' % self.id
+        return '<%s %s>' % (self.type, self.id)
+    
+    def process(self):
+        # Based on the queue that this was in, we should call the appropriate
+        # method. So if it was in the 'testing' queue, we should call 'testing'
+        if hasattr(self, self.queue):
+            # Invoke it if it exists!
+            try:
+                getattr(self, self.queue)()
+            except:
+                self.fail(self.queue + '-failure', traceback.format_exc())
+        else:
+            # Or fail with a message to that effect
+            self.fail(self.queue + '-method-missing', 'The ' + self.queue + ' method is missing for the ' + self.type + 'class')
     
     def ttl(self):
         '''How long until this expires, in seconds'''
@@ -70,6 +100,7 @@ class Job(object):
         actionable.'''
         return self.client._put([queue], [
             self.id,
+            self.type,
             json.dumps(self.data),
             time.time()
         ])

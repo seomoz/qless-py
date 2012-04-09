@@ -6,6 +6,9 @@ import qless
 import redis
 import unittest
 
+class FooJob(qless.Job):
+    pass
+
 class TestQless(unittest.TestCase):
     def setUp(self):
         self.redis  = redis.Redis()
@@ -62,6 +65,7 @@ class TestQless(unittest.TestCase):
         self.assertEqual(job.tags    , [])
         self.assertEqual(job.worker  , '')
         self.assertEqual(job.state   , 'waiting')
+        self.assertEqual(job.type    , 'qless.job.Job')
         # Make sure the times for the history match up
         job.history[0]['put'] = math.floor(job.history[0]['put'])
         self.assertEqual(job.history , [{
@@ -87,6 +91,29 @@ class TestQless(unittest.TestCase):
         # Now let's pop them all off one by one
         self.assertEqual(len(self.q.pop(7)) , 7)
         self.assertEqual(len(self.q.pop(10)), 3)
+    
+    def test_put_pop_attributes(self):
+        # In this test, we want to put a job, pop a job, and make
+        # sure that when popped, we get all the attributes back 
+        # that we expect
+        #   1) put a job
+        #   2) pop said job, check existence of attributes
+        jid = self.q.put({'test': 'test_put_pop_attributes'})
+        self.client.config.set('heartbeat', 60)
+        job = self.q.pop()
+        self.assertEqual(job.data     , {'test': 'test_put_pop_attributes'})
+        self.assertEqual(job.worker   , self.client.worker)
+        self.assertTrue( job.expires  > (time.time() - 20))
+        self.assertEqual(job.state    , 'running')
+        self.assertEqual(job.queue    , 'testing')
+        self.assertEqual(job.remaining, 5)
+        self.assertEqual(job.retries  , 5)
+        self.assertEqual(job.id       , jid)
+        self.assertEqual(job.type     , 'qless.job.Job')
+        self.assertEqual(job.tags     , [])
+        jid = self.q.put(FooJob({'test': 'test_put_pop_attributes'}))
+        job = self.q.pop()
+        self.assertTrue('FooJob' in job.type)
     
     def test_data_access(self):
         # In this test, we'd like to make sure that all the data attributes
@@ -292,6 +319,29 @@ class TestQless(unittest.TestCase):
         self.assertEqual(self.q.pop(), None)
         self.assertEqual(self.q.peek(), None)
     
+    def test_peek_attributes(self):
+        # In this test, we want to put a job and peek that job, we 
+        # get all the attributes back that we expect
+        #   1) put a job
+        #   2) peek said job, check existence of attributes
+        jid = self.q.put({'test': 'test_put_pop_attributes'})
+        self.client.config.set('heartbeat', 60)
+        job = self.q.peek()
+        self.assertEqual(job.data     , {'test': 'test_put_pop_attributes'})
+        self.assertEqual(job.worker   , '')
+        self.assertEqual(job.state    , 'waiting')
+        self.assertEqual(job.queue    , 'testing')
+        self.assertEqual(job.remaining, 5)
+        self.assertEqual(job.retries  , 5)
+        self.assertEqual(job.id       , jid)
+        self.assertEqual(job.type     , 'qless.job.Job')
+        self.assertEqual(job.tags     , [])
+        jid = self.q.put(FooJob({'test': 'test_put_pop_attributes'}))
+        # Pop off the first job
+        job = self.q.pop()
+        job = self.q.peek()
+        self.assertTrue('FooJob' in job.type)
+    
     def test_locks(self):
         # In this test, we're going to have two queues that point
         # to the same queue, but we're going to have them represent
@@ -334,8 +384,17 @@ class TestQless(unittest.TestCase):
         })
         results = self.client.failed('foo')
         self.assertEqual(results['total'], 1)
-        self.assertEqual(results['jobs'][0].id, jid)
-        self.assertEqual(results['jobs'][0].queue, 'testing')
+        job = results['jobs'][0]
+        self.assertEqual(job.id       , jid)
+        self.assertEqual(job.queue    , 'testing')
+        self.assertEqual(job.data     , {'test': 'fail_failed'})
+        self.assertEqual(job.worker   , '')
+        self.assertEqual(job.state    , 'failed')
+        self.assertEqual(job.queue    , 'testing')
+        self.assertEqual(job.remaining, 5)
+        self.assertEqual(job.retries  , 5)
+        self.assertEqual(job.type     , 'qless.job.Job')
+        self.assertEqual(job.tags     , [])
     
     def test_pop_fail(self):
         # In this test, we want to make sure that we can pop a job,
@@ -998,6 +1057,22 @@ class TestQless(unittest.TestCase):
             'jobs'   : {},
             'stalled': {}
         })
+    
+    def test_running_stalled_scheduled(self):
+        # Make sure that we can get a list of jids for a queue that
+        # are running, stalled and scheduled
+        #   1) Put a job, pop it, check 'running'
+        #   2) Put a job scheduled, check 'scheduled'
+        #   3) Put a job with negative heartbeat, pop, check stalled
+        jid = self.q.put({'test': 'rss'})
+        job = self.q.pop()
+        self.assertEqual(self.q.running(), [jid])
+        jid = self.q.put({'test': 'rss'}, delay=60)
+        self.assertEqual(self.q.scheduled(), [jid])
+        self.client.config.set('heartbeat', -60)
+        jid = self.q.put({'test': 'rss'})
+        job = self.q.pop()
+        self.assertEqual(self.q.stalled(), [jid])
     
     # ==================================================================
     # In these tests, we want to ensure that if we don't provide enough

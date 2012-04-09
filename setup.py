@@ -26,6 +26,7 @@ setup(name               = 'qless-py',
 	packages             = ['qless'],
 	package_dir          = {'qless': 'qless'},
     package_data         = {'qless': ['qless-core/*.lua']},
+    scripts              = ['bin/qless-worker'],
     include_package_data = True,
 	classifiers          = [
         'License :: OSI Approved :: MIT License',
