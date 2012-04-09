@@ -8,10 +8,10 @@ import simplejson as json
 # The Job class
 class Job(object):
     @staticmethod
-    def parse(client, jid, data, priority, tags, worker, expires, state, queue, remaining, retries, failure={}, history=[], **kwargs):
+    def parse(client, jid, data, priority, tags, worker, expires, state, queue, remaining, retries, failure, history, klass=''):
         # Alright, here's the unpleasant bit about trying to find
         # the appropriate class and instantiate it accordingly.
-        name = kwargs.get('type', 'qless.job.Job')
+        name = klass or 'qless.job.Job'
         mod = __import__(name.rpartition('.')[0])
         mod = getattr(mod, name.rpartition('.')[2])
         # components = name.split('.')
@@ -37,7 +37,7 @@ class Job(object):
         self.tags     = tags or []
         self.delay    = delay or 0
         self.retries  = retries or 5
-        self.type     = self.__module__ + '.' + self.__class__.__name__
+        self.klass    = self.__module__ + '.' + self.__class__.__name__
     
     def __getitem__(self, key):
         return self.data.get(key)
@@ -66,7 +66,7 @@ class Job(object):
         return s
     
     def __repr__(self):
-        return '<%s %s>' % (self.type, self.jid)
+        return '<%s %s>' % (self.klass, self.jid)
     
     def process(self):
         # Based on the queue that this was in, we should call the appropriate
@@ -79,7 +79,7 @@ class Job(object):
                 self.fail(self.queue + '-failure', traceback.format_exc())
         else:
             # Or fail with a message to that effect
-            self.fail(self.queue + '-method-missing', 'The ' + self.queue + ' method is missing for the ' + self.type + 'class')
+            self.fail(self.queue + '-method-missing', 'The ' + self.queue + ' method is missing for the ' + self.klass + 'class')
     
     def ttl(self):
         '''How long until this expires, in seconds'''
@@ -100,7 +100,7 @@ class Job(object):
         actionable.'''
         return self.client._put([queue], [
             self.jid,
-            self.type,
+            self.klass,
             json.dumps(self.data),
             time.time()
         ])

@@ -65,7 +65,7 @@ class TestQless(unittest.TestCase):
         self.assertEqual(job.tags    , [])
         self.assertEqual(job.worker  , '')
         self.assertEqual(job.state   , 'waiting')
-        self.assertEqual(job.type    , 'qless.job.Job')
+        self.assertEqual(job.klass   , 'qless.job.Job')
         # Make sure the times for the history match up
         job.history[0]['put'] = math.floor(job.history[0]['put'])
         self.assertEqual(job.history , [{
@@ -109,11 +109,11 @@ class TestQless(unittest.TestCase):
         self.assertEqual(job.remaining, 5)
         self.assertEqual(job.retries  , 5)
         self.assertEqual(job.jid      , jid)
-        self.assertEqual(job.type     , 'qless.job.Job')
+        self.assertEqual(job.klass    , 'qless.job.Job')
         self.assertEqual(job.tags     , [])
         jid = self.q.put(FooJob({'test': 'test_put_pop_attributes'}))
         job = self.q.pop()
-        self.assertTrue('FooJob' in job.type)
+        self.assertTrue('FooJob' in job.klass)
     
     def test_data_access(self):
         # In this test, we'd like to make sure that all the data attributes
@@ -334,13 +334,13 @@ class TestQless(unittest.TestCase):
         self.assertEqual(job.remaining, 5)
         self.assertEqual(job.retries  , 5)
         self.assertEqual(job.jid      , jid)
-        self.assertEqual(job.type     , 'qless.job.Job')
+        self.assertEqual(job.klass    , 'qless.job.Job')
         self.assertEqual(job.tags     , [])
         jid = self.q.put(FooJob({'test': 'test_put_pop_attributes'}))
         # Pop off the first job
         job = self.q.pop()
         job = self.q.peek()
-        self.assertTrue('FooJob' in job.type)
+        self.assertTrue('FooJob' in job.klass)
     
     def test_locks(self):
         # In this test, we're going to have two queues that point
@@ -393,7 +393,7 @@ class TestQless(unittest.TestCase):
         self.assertEqual(job.queue    , 'testing')
         self.assertEqual(job.remaining, 5)
         self.assertEqual(job.retries  , 5)
-        self.assertEqual(job.type     , 'qless.job.Job')
+        self.assertEqual(job.klass    , 'qless.job.Job')
         self.assertEqual(job.tags     , [])
     
     def test_pop_fail(self):

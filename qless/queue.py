@@ -32,7 +32,7 @@ class Queue(object):
         
         return self.client._put([self.name], [
             data.jid,
-            data.type,
+            data.klass,
             json.dumps(data.data),
             time.time(),
             data.priority,
