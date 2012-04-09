@@ -123,9 +123,9 @@ class Job(object):
         Renew the heartbeat, if possible, and optionally update the job's user data.'''
         return float(self.client._heartbeat([], [self.jid, self.client.worker, time.time(), json.dumps(self.data)]) or 0)
     
-    def fail(self, t, message):
-        '''Fail(0, id, worker, type, message, now, [data])
-        -----------------------------------------------
+    def fail(self, group, message):
+        '''Fail(0, id, worker, group, message, now, [data])
+        ---------------------------------------------------
         Mark the particular job as failed, with the provided type, and a more specific
         message. By `type`, we mean some phrase that might be one of several categorical
         modes of failure. The `message` is something more job-specific, like perhaps
@@ -141,7 +141,7 @@ class Job(object):
         requests to heartbeat or complete that job will fail. Failed jobs are kept until
         they are canceled or completed. __Returns__ the id of the failed job if successful,
         or `False` on failure.'''
-        return self.client._fail([], [self.jid, self.client.worker, t, message, time.time(), json.dumps(self.data)]) or False
+        return self.client._fail([], [self.jid, self.client.worker, group, message, time.time(), json.dumps(self.data)]) or False
     
     def cancel(self):
         '''Cancel(0, id)

@@ -38,16 +38,16 @@ class client(object):
         results['jobs'] = [Job.parse(self, **j) for j in results['jobs']]
         return results
     
-    def failed(self, t=None, start=0, limit=25):
-        '''Failed(0, [type, [start, [limit]]])
-        -----------------------------------
+    def failed(self, group=None, start=0, limit=25):
+        '''Failed(0, [group, [start, [limit]]])
+        ---------------------------------------
         If no type is provided, this returns a JSON blob of the counts of the various
         types of failures known. If a type is provided, it will report up to `limit`
         from `start` of the jobs affected by that issue. __Returns__ a JSON blob.'''
-        if not t:
+        if not group:
             return json.loads(self._failed([], []))
         else:
-            results = json.loads(self._failed([], [t, start, limit]))
+            results = json.loads(self._failed([], [group, start, limit]))
             results['jobs'] = [Job.parse(self, **j) for j in results['jobs']]
             return results
     
