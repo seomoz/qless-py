@@ -7,19 +7,21 @@ import simplejson as json
 
 # The Job class
 class Job(object):
+    def perform(self):
+        pass
+    
     @staticmethod
     def parse(client, jid, data, priority, tags, worker, expires, state, queue, remaining, retries, failure, history, klass=''):
         # Alright, here's the unpleasant bit about trying to find
         # the appropriate class and instantiate it accordingly.
         name = klass or 'qless.job.Job'
         mod = __import__(name.rpartition('.')[0])
+        for m in name.split('.')[1:-1]:
+            mod = getattr(mod, m)
         mod = getattr(mod, name.rpartition('.')[2])
-        # components = name.split('.')
-        # for comp in components[1:]:
-        #     print 'Getting ' + comp
-        #     mod = getattr(mod, comp)
         job = mod(data, jid, priority, tags, 0, retries)
         # The redis instance this job is associated with
+        job.klass = klass
         job.client    = client
         job.worker    = worker
         job.expires   = expires
