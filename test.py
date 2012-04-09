@@ -1168,10 +1168,23 @@ class TestQless(unittest.TestCase):
         self.assertRaises(Exception, heartbeat, *([], ['deadbeef']))
         # Missing expiration
         self.assertRaises(Exception, heartbeat, *([], ['deadbeef', 'worker1']))
-        # Malformed expiration
+        # Malformed now
         self.assertRaises(Exception, heartbeat, *([], ['deadbeef', 'worker1', 'howdy']))
         # Malformed JSON
         self.assertRaises(Exception, heartbeat, *([], ['deadbeef', 'worker1', 12345, '[}']))
+    
+    def test_lua_jobs(self):
+        jobs = qless.lua('jobs', self.redis)
+        # Providing keys
+        self.assertRaises(Exception, jobs, *(['foo'], []))
+        # Unrecognized option
+        self.assertRaises(Exception, jobs, *([], ['testing']))
+        # Missing now
+        self.assertRaises(Exception, jobs, *([], ['stalled']))
+        # Malformed now
+        self.assertRaises(Exception, jobs, *([], ['stalled', 'foo']))
+        # Missing queue
+        self.assertRaises(Exception, jobs, *([], ['stalled', 12345]))
     
     def test_lua_peek(self):
         peek = qless.lua('peek', self.redis)
@@ -1213,24 +1226,26 @@ class TestQless(unittest.TestCase):
         self.assertRaises(Exception, put, *(['foo', 'bar'], ['deadbeef', '{}', 12345]))
         # Missing id
         self.assertRaises(Exception, put, *(['foo'], []))
-        # Missing data
+        # Missing klass
         self.assertRaises(Exception, put, *(['foo'], ['deadbeef']))
+        # Missing data
+        self.assertRaises(Exception, put, *(['foo'], ['deadbeef', 'foo']))
         # Malformed data
-        self.assertRaises(Exception, put, *(['foo'], ['deadbeef', '[}']))
+        self.assertRaises(Exception, put, *(['foo'], ['deadbeef', 'foo', '[}']))
         # Non-dictionary data
-        self.assertRaises(Exception, put, *(['foo'], ['deadbeef', '[]']))
+        self.assertRaises(Exception, put, *(['foo'], ['deadbeef', 'foo', '[]']))
         # Non-dictionary data
-        self.assertRaises(Exception, put, *(['foo'], ['deadbeef', '"foobar"']))
+        self.assertRaises(Exception, put, *(['foo'], ['deadbeef', 'foo', '"foobar"']))
         # Missing now
-        self.assertRaises(Exception, put, *(['foo'], ['deadbeef', '{}']))
+        self.assertRaises(Exception, put, *(['foo'], ['deadbeef', 'foo', '{}']))
         # Malformed now
-        self.assertRaises(Exception, put, *(['foo'], ['deadbeef', '{}', 'howdy']))
+        self.assertRaises(Exception, put, *(['foo'], ['deadbeef', 'foo', '{}', 'howdy']))
         # Malformed priority
-        self.assertRaises(Exception, put, *(['foo'], ['deadbeef', '{}', 12345, 'howdy']))
+        self.assertRaises(Exception, put, *(['foo'], ['deadbeef', 'foo', '{}', 12345, 'howdy']))
         # Malformed tags
-        self.assertRaises(Exception, put, *(['foo'], ['deadbeef', '{}', 12345, 0, '[}']))
+        self.assertRaises(Exception, put, *(['foo'], ['deadbeef', 'foo', '{}', 12345, 0, '[}']))
         # Malformed dleay
-        self.assertRaises(Exception, put, *(['foo'], ['deadbeef', '{}', 12345, 0, '[]', 'howdy']))
+        self.assertRaises(Exception, put, *(['foo'], ['deadbeef', 'foo', '{}', 12345, 0, '[]', 'howdy']))
     
     def test_lua_queues(self):
         queues = qless.lua('queues', self.redis)
