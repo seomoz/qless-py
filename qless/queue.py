@@ -31,7 +31,7 @@ class Queue(object):
             data = Job(data, priority=priority, tags=tags, delay=delay, retries=retries)
         
         return self.client._put([self.name], [
-            data.id,
+            data.jid,
             data.type,
             json.dumps(data.data),
             time.time(),

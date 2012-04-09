@@ -17,13 +17,16 @@ class Worker(object):
     def run(self):
         while True:
             try:
+                seen = False
                 for queue in self.queues:
                     job = queue.pop()
                     if job:
+                        seen = True
                         job.process()
                 # Sleep for a little while before trying again
-                print 'Sleeping...'
-                time.sleep(self.interval)
+                if not seen:
+                    print 'Sleeping...'
+                    time.sleep(self.interval)
             except KeyboardInterrupt:
                 pass
 

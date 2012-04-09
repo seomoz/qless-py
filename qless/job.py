@@ -8,7 +8,7 @@ import simplejson as json
 # The Job class
 class Job(object):
     @staticmethod
-    def parse(client, id, data, priority, tags, worker, expires, state, queue, remaining, retries, failure={}, history=[], **kwargs):
+    def parse(client, jid, data, priority, tags, worker, expires, state, queue, remaining, retries, failure={}, history=[], **kwargs):
         # Alright, here's the unpleasant bit about trying to find
         # the appropriate class and instantiate it accordingly.
         name = kwargs.get('type', 'qless.job.Job')
@@ -18,7 +18,7 @@ class Job(object):
         # for comp in components[1:]:
         #     print 'Getting ' + comp
         #     mod = getattr(mod, comp)
-        job = mod(data, id, priority, tags, 0, retries)
+        job = mod(data, jid, priority, tags, 0, retries)
         # The redis instance this job is associated with
         job.client    = client
         job.worker    = worker
@@ -30,9 +30,9 @@ class Job(object):
         job.history   = history or []
         return job
     
-    def __init__(self, data, id=None, priority=None, tags=None, delay=None, retries=None):
+    def __init__(self, data, jid=None, priority=None, tags=None, delay=None, retries=None):
         self.data     = data
-        self.id       = id or uuid.uuid1().hex
+        self.jid      = jid or uuid.uuid1().hex
         self.priority = priority or 0
         self.tags     = tags or []
         self.delay    = delay or 0
@@ -47,7 +47,7 @@ class Job(object):
     
     def __str__(self):
         import pprint
-        s  = 'qless:Job : %s\n' % self.id
+        s  = 'qless:Job : %s\n' % self.jid
         s += '\tpriority: %i\n' % self.priority
         s += '\ttags: %s\n' % ', '.join(self.tags)
         s += '\tworker: %s\n' % self.worker
@@ -66,7 +66,7 @@ class Job(object):
         return s
     
     def __repr__(self):
-        return '<%s %s>' % (self.type, self.id)
+        return '<%s %s>' % (self.type, self.jid)
     
     def process(self):
         # Based on the queue that this was in, we should call the appropriate
@@ -99,7 +99,7 @@ class Job(object):
         argument should be in how many seconds the instance should be considered 
         actionable.'''
         return self.client._put([queue], [
-            self.id,
+            self.jid,
             self.type,
             json.dumps(self.data),
             time.time()
@@ -111,17 +111,17 @@ class Job(object):
         Complete a job and optionally put it in another queue, either scheduled or to
         be considered waiting immediately.'''
         if next:
-            return self.client._complete([], [self.id, self.client.worker, self.queue,
+            return self.client._complete([], [self.jid, self.client.worker, self.queue,
                 time.time(), json.dumps(self.data), next, delay or 0]) or False
         else:
-            return self.client._complete([], [self.id, self.client.worker, self.queue,
+            return self.client._complete([], [self.jid, self.client.worker, self.queue,
                 time.time(), json.dumps(self.data)]) or False
     
     def heartbeat(self):
         '''Heartbeat(0, id, worker, expiration, [data])
         -------------------------------------------
         Renew the heartbeat, if possible, and optionally update the job's user data.'''
-        return float(self.client._heartbeat([], [self.id, self.client.worker, time.time(), json.dumps(self.data)]) or 0)
+        return float(self.client._heartbeat([], [self.jid, self.client.worker, time.time(), json.dumps(self.data)]) or 0)
     
     def fail(self, t, message):
         '''Fail(0, id, worker, type, message, now, [data])
@@ -141,7 +141,7 @@ class Job(object):
         requests to heartbeat or complete that job will fail. Failed jobs are kept until
         they are canceled or completed. __Returns__ the id of the failed job if successful,
         or `False` on failure.'''
-        return self.client._fail([], [self.id, self.client.worker, t, message, time.time(), json.dumps(self.data)]) or False
+        return self.client._fail([], [self.jid, self.client.worker, t, message, time.time(), json.dumps(self.data)]) or False
     
     def cancel(self):
         '''Cancel(0, id)
@@ -149,12 +149,12 @@ class Job(object):
         Cancel a job from taking place. It will be deleted from the system, and any
         attempts to renew a heartbeat will fail, and any attempts to complete it
         will fail. If you try to get the data on the object, you will get nothing.'''
-        return self.client._cancel([], [self.id])
+        return self.client._cancel([], [self.jid])
     
     def track(self, *tags):
-        args = ['track', self.id, time.time()]
+        args = ['track', self.jid, time.time()]
         args.extend(tags)
         return self.client._track([], args)
     
     def untrack(self):
-        return self.client._track([], ['untrack', self.id, time.time()])
+        return self.client._track([], ['untrack', self.jid, time.time()])
