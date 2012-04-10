@@ -2,17 +2,12 @@
 
 import uuid
 import time
+import types
 import traceback
 import simplejson as json
 
 # The Job class
 class Job(object):
-    def perform(self):
-        mod = __import__(name.rpartition('.')[0])
-        for m in name.split('.')[1:-1]:
-            mod = getattr(mod, m)
-        mod = getattr(mod, name.rpartition('.')[2])
-    
     def __init__(self, client, **kwargs):
         self.client = client
         for att in ['data', 'jid', 'klass', 'priority', 'tags', 'worker', 'expires',
@@ -52,17 +47,28 @@ class Job(object):
         return '<%s %s>' % (self.klass, self.jid)
     
     def process(self):
+        # First, let's try to find the class that is responsible for handling this job
+        mod = __import__(self.klass.rpartition('.')[0])
+        for m in self.klass.split('.')[1:-1]:
+            mod = getattr(mod, m)
+        mod = getattr(mod, self.klass.rpartition('.')[2])
+        
         # Based on the queue that this was in, we should call the appropriate
         # method. So if it was in the 'testing' queue, we should call 'testing'
-        if hasattr(self, self.queue):
-            # Invoke it if it exists!
-            try:
-                getattr(self, self.queue)()
-            except:
-                self.fail(self.queue + '-failure', traceback.format_exc())
+        # If it doesn't have the appropriate function, we'll call process on it
+        method = getattr(mod, self.queue, getattr(mod, 'process', None))
+        if method:
+            if isinstance(method, types.FunctionType):
+                try:
+                    method(self)
+                except:
+                    self.fail(self.queue + '-failure', traceback.format_exc())
+            else:
+                # Or fail with a message to that effect
+                self.fail(self.queue + '-method-type', repr(method) + ' is not static')
         else:
             # Or fail with a message to that effect
-            self.fail(self.queue + '-method-missing', 'The ' + self.queue + ' method is missing for the ' + self.klass + 'class')
+            self.fail(self.queue + '-method-missing', self.klass + ' is missing a method "' + self.queue + '" or "process"')
     
     def ttl(self):
         '''How long until this expires, in seconds'''

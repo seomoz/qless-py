@@ -9,15 +9,15 @@ import simplejson as json
 logger = logging.getLogger('qless')
 
 class client(object):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, host='localhost', port=6379, hostname = None, **kwargs):
         import os
         import socket
         # This is our unique idenitifier as a worker
-        self.worker = socket.gethostname() + '-' + str(os.getpid())
+        self.worker = hostname or socket.gethostname()
         # This is just the redis instance we're connected to
         # conceivably someone might want to work with multiple
         # instances simultaneously.
-        self.redis  = redis.Redis(*args, **kwargs)
+        self.redis  = redis.Redis(host, port, **kwargs)
         self.config = Config(self)
         # Client's lua scripts
         for cmd in [
