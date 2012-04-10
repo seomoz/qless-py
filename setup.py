@@ -3,12 +3,12 @@
 try:
 	from setuptools import setup
 	extra = {
-		'install_requires' : ['argparse']
+		'install_requires' : ['argparse', 'hiredis', 'redis', 'psutil']
 	}
 except ImportError:
 	from distutils.core import setup
 	extra = {
-		'dependencies' : ['argparse']
+		'dependencies' : ['argparse', 'hiredis', 'redis', 'psutil']
 	}
 
 setup(name               = 'qless-py',
