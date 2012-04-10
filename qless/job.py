@@ -8,38 +8,19 @@ import simplejson as json
 # The Job class
 class Job(object):
     def perform(self):
-        pass
-    
-    @staticmethod
-    def parse(client, jid, data, priority, tags, worker, expires, state, queue, remaining, retries, failure, history, klass=''):
-        # Alright, here's the unpleasant bit about trying to find
-        # the appropriate class and instantiate it accordingly.
-        name = klass or 'qless.job.Job'
         mod = __import__(name.rpartition('.')[0])
         for m in name.split('.')[1:-1]:
             mod = getattr(mod, m)
         mod = getattr(mod, name.rpartition('.')[2])
-        job = mod(data, jid, priority, tags, 0, retries)
-        # The redis instance this job is associated with
-        job.klass = klass
-        job.client    = client
-        job.worker    = worker
-        job.expires   = expires
-        job.state     = state
-        job.queue     = queue
-        job.remaining = remaining
-        job.failure   = failure or {}
-        job.history   = history or []
-        return job
     
-    def __init__(self, data, jid=None, priority=None, tags=None, delay=None, retries=None):
-        self.data     = data
-        self.jid      = jid or uuid.uuid1().hex
-        self.priority = priority or 0
-        self.tags     = tags or []
-        self.delay    = delay or 0
-        self.retries  = retries or 5
-        self.klass    = self.__module__ + '.' + self.__class__.__name__
+    def __init__(self, client, **kwargs):
+        self.client = client
+        for att in ['data', 'jid', 'klass', 'priority', 'tags', 'worker', 'expires',
+            'state', 'tracked', 'queue', 'retries', 'remaining', 'failure', 'history']:
+            setattr(self, att, kwargs[att])
+        
+        # Because of how Lua parses JSON, empty tags comes through as {}
+        self.tags = self.tags or []
     
     def __getitem__(self, key):
         return self.data.get(key)

@@ -13,7 +13,7 @@ class Queue(object):
         self.worker  = worker
         self._hb     = 60
     
-    def put(self, data, priority=None, tags=None, delay=None, retries=None):
+    def put(self, klass, data, priority=None, tags=None, delay=None, retries=None):
         # '''Put(1, queue, id, data, now, [priority, [tags, [delay, [retries]]]])
         # -----------------------------------------------------------------------
         # Either create a new job in the provided queue with the provided attributes,
@@ -26,19 +26,15 @@ class Queue(object):
         # a JSON array of the tags associated with the instance and the `valid after`
         # argument should be in how many seconds the instance should be considered 
         # actionable.'''
-        
-        if not isinstance(data, Job):
-            data = Job(data, priority=priority, tags=tags, delay=delay, retries=retries)
-        
         return self.client._put([self.name], [
-            data.jid,
-            data.klass,
-            json.dumps(data.data),
+            uuid.uuid1().hex,
+            klass.__module__ + '.' + klass.__name__,
+            json.dumps(data),
             time.time(),
-            data.priority,
-            json.dumps(data.tags),
-            data.delay,
-            data.retries
+            priority or 0,
+            json.dumps(tags or []),
+            delay or 0,
+            retries or 5
         ])
     
     def pop(self, count=None):
@@ -47,7 +43,7 @@ class Queue(object):
         Passing in the queue from which to pull items, the current time, when the locks
         for these returned items should expire, and the number of items to be popped
         off.'''
-        results = [Job.parse(self.client, **json.loads(j)) for j in self.client._pop([self.name], [self.worker, count or 1, time.time()])]
+        results = [Job(self.client, **json.loads(j)) for j in self.client._pop([self.name], [self.worker, count or 1, time.time()])]
         if count == None:
             return (len(results) and results[0]) or None
         return results
@@ -57,7 +53,7 @@ class Queue(object):
         --------------------------
         Similar to the `Pop` command, except that it merely peeks at the next items
         in the queue.'''
-        results = [Job.parse(self.client, **json.loads(r)) for r in self.client._peek([self.name], [count or 1, time.time()])]
+        results = [Job(self.client, **json.loads(r)) for r in self.client._peek([self.name], [count or 1, time.time()])]
         if count == None:
             return (len(results) and results[0]) or None
         return results

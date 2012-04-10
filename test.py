@@ -58,7 +58,7 @@ class TestQless(unittest.TestCase):
         #   1) put in a job
         #   2) get job
         #   3) delete job
-        jid = self.q.put({'test': 'put_get'})
+        jid = self.q.put(qless.Job, {'test': 'put_get'})
         job = self.client.job(jid)
         self.assertEqual(job.priority, 0)
         self.assertEqual(job.data    , {'test': 'put_get'})
@@ -81,7 +81,7 @@ class TestQless(unittest.TestCase):
         #   3) we can pop them all off
         #   4) once we've popped them off, we can 
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
-        jids = [self.q.put({'test': 'push_pop_many', 'count': c}) for c in range(10)]
+        jids = [self.q.put(qless.Job, {'test': 'push_pop_many', 'count': c}) for c in range(10)]
         self.assertEqual(len(self.q), len(jids), 'Inserting should increase the size of the queue')
         
         # Alright, they're in the queue. Let's take a peek
@@ -98,7 +98,7 @@ class TestQless(unittest.TestCase):
         # that we expect
         #   1) put a job
         #   2) pop said job, check existence of attributes
-        jid = self.q.put({'test': 'test_put_pop_attributes'})
+        jid = self.q.put(qless.Job, {'test': 'test_put_pop_attributes'})
         self.client.config.set('heartbeat', 60)
         job = self.q.pop()
         self.assertEqual(job.data     , {'test': 'test_put_pop_attributes'})
@@ -111,7 +111,7 @@ class TestQless(unittest.TestCase):
         self.assertEqual(job.jid      , jid)
         self.assertEqual(job.klass    , 'qless.job.Job')
         self.assertEqual(job.tags     , [])
-        jid = self.q.put(FooJob({'test': 'test_put_pop_attributes'}))
+        jid = self.q.put(FooJob, {'test': 'test_put_pop_attributes'})
         job = self.q.pop()
         self.assertTrue('FooJob' in job.klass)
     
@@ -123,7 +123,7 @@ class TestQless(unittest.TestCase):
         #   3) Peek a job, check job['test']
         #   4) Pop a job,  check job['test']
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
-        jid = self.q.put({'test': 'data_access'})
+        jid = self.q.put(qless.Job, {'test': 'data_access'})
         job = self.client.job(jid)
         self.assertEqual(job['test'], 'data_access')
         job = self.q.peek()
@@ -137,7 +137,7 @@ class TestQless(unittest.TestCase):
         #   1) Insert 10 jobs into the queue with successively more priority
         #   2) Pop all the jobs, and ensure that with each pop we get the right one
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
-        jids = [self.q.put({'test': 'put_pop_priority', 'count': c}, priority=-c) for c in range(10)]
+        jids = [self.q.put(qless.Job, {'test': 'put_pop_priority', 'count': c}, priority=-c) for c in range(10)]
         last = len(jids)
         for i in range(len(jids)):
             job = self.q.pop()
@@ -154,7 +154,7 @@ class TestQless(unittest.TestCase):
         #   4) Put that job on again
         #   5) Make sure that we no longer get failed stats
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
-        jid = self.q.put({'test': 'put_failed'})
+        jid = self.q.put(qless.Job, {'test': 'put_failed'})
         job = self.client.job(jid)
         job.fail('foo', 'some message')
         self.assertEqual(self.client.failed(), {'foo':1})
@@ -172,10 +172,10 @@ class TestQless(unittest.TestCase):
         #   4) Pop until empty, saving jids
         #   5) Ensure popped jobs are in the same order
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
-        jids = [self.q.put({'test':'put_pop_order', 'count':c}) for c in range(20)]
+        jids = [self.q.put(qless.Job, {'test':'put_pop_order', 'count':c}) for c in range(20)]
         popped = [job.jid for job in [self.q.pop() for c in range(10)]]
         for i in range(10):
-            jids.extend(self.q.put({'test':'put_pop_order', 'count':c}, priority=i) for c in range(10))
+            jids.extend(self.q.put(qless.Job, {'test':'put_pop_order', 'count':c}, priority=i) for c in range(10))
             popped.extend([job.jid for job in self.q.pop(5)])
         next = self.q.pop()
         while next:
@@ -198,7 +198,7 @@ class TestQless(unittest.TestCase):
         oldtime = time.time
         now = time.time()
         time.time = lambda: now
-        jid = self.q.put({'test': 'scheduled'}, delay=10)
+        jid = self.q.put(qless.Job, {'test': 'scheduled'}, delay=10)
         self.assertEqual(self.q.pop(), None)
         self.assertEqual(len(self.q), 1)
         time.time = lambda: now + 11
@@ -217,7 +217,7 @@ class TestQless(unittest.TestCase):
         #   3) Pop job, check history
         #   4) Complete job, check history
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
-        jid = self.q.put({'test': 'put_history'})
+        jid = self.q.put(qless.Job, {'test': 'put_history'})
         job = self.client.job(jid)
         self.assertEqual(math.floor(job.history[0]['put']), math.floor(time.time()))
         # Now pop it
@@ -234,7 +234,7 @@ class TestQless(unittest.TestCase):
         #   3) Make sure that it's no longer in the first queue
         self.assertEqual(len(self.q    ), 0, 'Start with an empty queue')
         self.assertEqual(len(self.other), 0, 'Start with an empty queue "other"')
-        jid = self.q.put({'test': 'move_queues'})
+        jid = self.q.put(qless.Job, {'test': 'move_queues'})
         self.assertEqual(len(self.q), 1, 'Put failed')
         job = self.client.job(jid)
         job.move('other')
@@ -252,7 +252,7 @@ class TestQless(unittest.TestCase):
         #   4) Verify that heartbeats fail
         self.assertEqual(len(self.q    ), 0, 'Start with an empty queue')
         self.assertEqual(len(self.other), 0, 'Start with an empty queue "other"')
-        jid = self.q.put({'test': 'move_queue_popped'})
+        jid = self.q.put(qless.Job, {'test': 'move_queue_popped'})
         self.assertEqual(len(self.q), 1, 'Put failed')
         job = self.q.pop()
         self.assertNotEqual(job, None)
@@ -272,7 +272,7 @@ class TestQless(unittest.TestCase):
         #   5) Compare 2 and 4  
         self.assertEqual(len(self.q    ), 0, 'Start with an empty queue')
         self.assertEqual(len(self.other), 0, 'Start with an empty queue "other"')
-        jid = self.q.put({'test': 'move_non_destructive'}, tags=['foo', 'bar'], priority=5)
+        jid = self.q.put(qless.Job, {'test': 'move_non_destructive'}, tags=['foo', 'bar'], priority=5)
         before = self.client.job(jid)
         before.move('other')
         after  = self.client.job(jid)
@@ -291,7 +291,7 @@ class TestQless(unittest.TestCase):
         #   2) B tries to get an item, fails
         #   3) A renews its heartbeat successfully
         self.assertEqual(len(self.a), 0, 'Start with an empty queue')
-        jid  = self.q.put({'test': 'heartbeat'})
+        jid  = self.q.put(qless.Job, {'test': 'heartbeat'})
         ajob = self.a.pop()
         self.assertNotEqual(ajob, None)
         bjob = self.b.pop()
@@ -306,7 +306,7 @@ class TestQless(unittest.TestCase):
         #   2) DO NOT pop that job
         #   3) Ensure we cannot heartbeat that job
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
-        jid = self.q.put({'test': 'heartbeat_state'})
+        jid = self.q.put(qless.Job, {'test': 'heartbeat_state'})
         job = self.client.job(jid)
         self.assertEqual(job.heartbeat(), False)
     
@@ -324,7 +324,7 @@ class TestQless(unittest.TestCase):
         # get all the attributes back that we expect
         #   1) put a job
         #   2) peek said job, check existence of attributes
-        jid = self.q.put({'test': 'test_put_pop_attributes'})
+        jid = self.q.put(qless.Job, {'test': 'test_put_pop_attributes'})
         self.client.config.set('heartbeat', 60)
         job = self.q.peek()
         self.assertEqual(job.data     , {'test': 'test_put_pop_attributes'})
@@ -336,7 +336,7 @@ class TestQless(unittest.TestCase):
         self.assertEqual(job.jid      , jid)
         self.assertEqual(job.klass    , 'qless.job.Job')
         self.assertEqual(job.tags     , [])
-        jid = self.q.put(FooJob({'test': 'test_put_pop_attributes'}))
+        jid = self.q.put(FooJob, {'test': 'test_put_pop_attributes'})
         # Pop off the first job
         job = self.q.pop()
         job = self.q.peek()
@@ -351,7 +351,7 @@ class TestQless(unittest.TestCase):
         #   3) A tries to renew lock on item, should fail
         #   4) B tries to renew lock on item, should succeed
         #   5) Both clean up
-        jid = self.q.put({'test': 'locks'})
+        jid = self.q.put(qless.Job, {'test': 'locks'})
         # Reset our heartbeat for both A and B
         self.client.config.set('heartbeat', -10)
         # Make sure a gets a job
@@ -375,7 +375,7 @@ class TestQless(unittest.TestCase):
         #   4) Ensure that the job still has its original queue
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
         self.assertEqual(len(self.client.failed()), 0)
-        jid = self.q.put({'test': 'fail_failed'})
+        jid = self.q.put(qless.Job, {'test': 'fail_failed'})
         job = self.client.job(jid)
         job.fail('foo', 'Some sort of message')
         self.assertEqual(self.q.pop(), None)
@@ -406,7 +406,7 @@ class TestQless(unittest.TestCase):
         #   4) Complete job fails
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
         self.assertEqual(len(self.client.failed()), 0)
-        jid = self.q.put({'test': 'pop_fail'})
+        jid = self.q.put(qless.Job, {'test': 'pop_fail'})
         job = self.q.pop()
         self.assertNotEqual(job, None)
         job.fail('foo', 'Some sort of message')
@@ -428,7 +428,7 @@ class TestQless(unittest.TestCase):
         #   4) Attempt to fail job fails
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
         self.assertEqual(len(self.client.failed()), 0)
-        jid = self.q.put({'test': 'fail_complete'})
+        jid = self.q.put(qless.Job, {'test': 'fail_complete'})
         job = self.q.pop()
         job.complete()
         self.assertEqual(job.fail('foo', 'Some sort of message'), False)
@@ -442,7 +442,7 @@ class TestQless(unittest.TestCase):
         #   3) Ensure that it's no longer in the queue
         #   4) Ensure that we can't get data for it
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
-        jid = self.q.put({'test': 'cancel'})
+        jid = self.q.put(qless.Job, {'test': 'cancel'})
         job = self.client.job(jid)
         self.assertEqual(len(self.q), 1)
         job.cancel()
@@ -459,7 +459,7 @@ class TestQless(unittest.TestCase):
         #   5) Heartbeats fail, Complete fails
         #   6) Ensure that we can't get data for it
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
-        jid = self.q.put({'test': 'cancel_heartbeat'})
+        jid = self.q.put(qless.Job, {'test': 'cancel_heartbeat'})
         job = self.q.pop()
         job.cancel()
         self.assertEqual(len(self.q), 0)
@@ -476,7 +476,7 @@ class TestQless(unittest.TestCase):
         #   3) Make sure we see failure stats
         #   4) Cancel that job
         #   5) Make sure that we don't see failure stats
-        jid = self.q.put({'test': 'cancel_fail'})
+        jid = self.q.put(qless.Job, {'test': 'cancel_fail'})
         job = self.client.job(jid)
         job.fail('foo', 'some message')
         self.assertEqual(self.client.failed(), {'foo': 1})
@@ -493,7 +493,7 @@ class TestQless(unittest.TestCase):
         #   3) Complete that job
         #   4) Get the data on that job, check state
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
-        jid = self.q.put({'test': 'complete'})
+        jid = self.q.put(qless.Job, {'test': 'complete'})
         job = self.q.pop()
         self.assertNotEqual(job, None)
         self.assertEqual(job.complete(), 'complete')
@@ -515,7 +515,7 @@ class TestQless(unittest.TestCase):
         #   4) Get the data on that job, check state
         #   5) Ensure that there is a work item in that queue
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
-        jid = self.q.put({'test': 'complete_advance'})
+        jid = self.q.put(qless.Job, {'test': 'complete_advance'})
         job = self.q.pop()
         self.assertNotEqual(job, None)
         self.assertEqual(job.complete('testing'), 'waiting')
@@ -537,7 +537,7 @@ class TestQless(unittest.TestCase):
         #   3) First worker tries to complete it, should fail
         #   4) Second worker tries to complete it, should succeed
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
-        jid = self.q.put({'test': 'complete_fail'})
+        jid = self.q.put(qless.Job, {'test': 'complete_fail'})
         self.client.config.set('heartbeat', -10)
         ajob = self.a.pop()
         self.assertNotEqual(ajob, None)
@@ -559,7 +559,7 @@ class TestQless(unittest.TestCase):
         #   2) DO NOT pop that item from the queue
         #   3) Attempt to complete the job, ensure it fails
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
-        jid = self.q.put({'test': 'complete_fail'})
+        jid = self.q.put(qless.Job, {'test': 'complete_fail'})
         job = self.client.job(jid)
         self.assertEqual(job.complete('testing'), False)
     
@@ -571,7 +571,7 @@ class TestQless(unittest.TestCase):
         #   2) Complete it, advancing it to a different queue
         #   3) Ensure it appears in 'queues'
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
-        jid = self.q.put({'test': 'complete_queues'})
+        jid = self.q.put(qless.Job, {'test': 'complete_queues'})
         self.assertEqual(len([q for q in self.client.queues() if q['name'] == 'other']), 0)
         self.q.pop().complete('other')
         self.assertEqual(len([q for q in self.client.queues() if q['name'] == 'other']), 1)
@@ -587,7 +587,7 @@ class TestQless(unittest.TestCase):
         #   4) Complete each of these jobs
         #   5) Ensure that we have no data about jobs
         self.client.config.set('jobs-history', -1)
-        jids = [self.q.put({'test': 'job_time_experiation', 'count':c}) for c in range(20)]
+        jids = [self.q.put(qless.Job, {'test': 'job_time_experiation', 'count':c}) for c in range(20)]
         for c in range(len(jids)):
             self.q.pop().complete()
         self.assertEqual(self.redis.zcard('ql:completed'), 0)
@@ -604,7 +604,7 @@ class TestQless(unittest.TestCase):
         #   4) Complete each of these jobs
         #   5) Ensure that we have data about 10 jobs
         self.client.config.set('jobs-history-count', 10)
-        jids = [self.q.put({'test': 'job_count_expiration', 'count':c}) for c in range(20)]
+        jids = [self.q.put(qless.Job, {'test': 'job_count_expiration', 'count':c}) for c in range(20)]
         for c in range(len(jids)):
             self.q.pop().complete()
         self.assertEqual(self.redis.zcard('ql:completed'), 10)
@@ -625,7 +625,7 @@ class TestQless(unittest.TestCase):
         oldtime = time.time
         now = time.time()
         time.time = lambda: now
-        jids = [self.q.put({'test': 'stats_waiting', 'count': c}) for c in range(20)]
+        jids = [self.q.put(qless.Job, {'test': 'stats_waiting', 'count': c}) for c in range(20)]
         self.assertEqual(len(jids), 20)
         for i in range(len(jids)):
             time.time = lambda: (i + now)
@@ -666,7 +666,7 @@ class TestQless(unittest.TestCase):
         oldtime = time.time
         now = time.time()
         time.time = lambda: now
-        jids = [self.q.put({'test': 'stats_waiting', 'count': c}) for c in range(20)]
+        jids = [self.q.put(qless.Job, {'test': 'stats_waiting', 'count': c}) for c in range(20)]
         jobs = self.q.pop(20)
         self.assertEqual(len(jobs), 20)
         for i in range(len(jobs)):
@@ -701,7 +701,7 @@ class TestQless(unittest.TestCase):
         self.assertEqual(len(self.q), 0)
         self.assertEqual(self.client.queues(), {})
         # Now, let's actually add an item to a queue, but scheduled
-        self.q.put({'test': 'queues'}, delay=10)
+        self.q.put(qless.Job, {'test': 'queues'}, delay=10)
         expected = {
             'name': 'testing',
             'stalled': 0,
@@ -712,7 +712,7 @@ class TestQless(unittest.TestCase):
         self.assertEqual(self.client.queues(), [expected])
         self.assertEqual(self.client.queues("testing"), expected)
         
-        self.q.put({'test': 'queues'})
+        self.q.put(qless.Job, {'test': 'queues'})
         expected['waiting'] += 1
         self.assertEqual(self.client.queues(), [expected])
         self.assertEqual(self.client.queues("testing"), expected)
@@ -724,7 +724,7 @@ class TestQless(unittest.TestCase):
         self.assertEqual(self.client.queues("testing"), expected)
         
         # Now we'll have to mess up our heartbeat to make this work
-        self.q.put({'test': 'queues'})
+        self.q.put(qless.Job, {'test': 'queues'})
         self.client.config.set('heartbeat', -10)
         job = self.q.pop()
         expected['stalled'] += 1
@@ -738,7 +738,7 @@ class TestQless(unittest.TestCase):
         #   3) Untrack job, check
         #   4) Track job, cancel, check
         self.assertEqual(self.client.tracked(), {'expired':{}, 'jobs':[]})
-        job = self.client.job(self.q.put({'test':'track'}))
+        job = self.client.job(self.q.put(qless.Job, {'test':'track'}))
         job.track()
         self.assertEqual(len(self.client.tracked()['jobs']), 1)
         job.untrack()
@@ -747,13 +747,42 @@ class TestQless(unittest.TestCase):
         job.cancel()
         self.assertEqual(len(self.client.tracked()['expired']), 1)
     
+    def test_track_tracked(self):
+        # When peeked, popped, failed, etc., qless should know when a 
+        # job is tracked or not
+        # => 1) Put a job, track it
+        # => 2) Peek, ensure tracked
+        # => 3) Pop, ensure tracked
+        # => 4) Fail, check failed, ensure tracked
+        job = self.client.job(self.q.put(qless.Job, {'test': 'track_tracked'}))
+        job.track()
+        self.assertEqual(self.q.peek().tracked, True)
+        job = self.q.pop()
+        self.assertEqual(job.tracked, True)
+        job.fail('foo', 'bar')
+        self.assertEqual(self.client.failed('foo')['jobs'][0].tracked, True)
+    
+    def test_track_untracked(self):
+        # When peeked, popped, failed, etc., qless should know when a 
+        # job is not tracked
+        # => 1) Put a job
+        # => 2) Peek, ensure tracked
+        # => 3) Pop, ensure tracked
+        # => 4) Fail, check failed, ensure tracked
+        job = self.client.job(self.q.put(qless.Job, {'test': 'track_tracked'}))
+        self.assertEqual(self.q.peek().tracked, False)
+        job = self.q.pop()
+        self.assertEqual(job.tracked, False)
+        job.fail('foo', 'bar')
+        self.assertEqual(self.client.failed('foo')['jobs'][0].tracked, False)
+    
     def test_track_tag(self):
         # In this test, we want to make sure that when we begin tracking
         # a job, we can optionally provide tags with it, and those tags
         # get saved.
         #   1) Put job, ensure no tags
         #   2) Track job, ensure tags
-        job = self.client.job(self.q.put({'test':'track_tag'}))
+        job = self.client.job(self.q.put(qless.Job, {'test':'track_tag'}))
         self.assertEqual(job.tags, [])
         job.track('foo', 'bar')
         job = self.client.job(job.jid)
@@ -769,7 +798,7 @@ class TestQless(unittest.TestCase):
         #   4) Verify there are failures
         #   5) Verify the queue is empty
         self.assertEqual(self.client.failed(), {})
-        self.q.put({'test':'retries'}, retries=2)
+        self.q.put(qless.Job, {'test':'retries'}, retries=2)
         # Easier to lose the heartbeat lock
         self.client.config.set('heartbeat', -10)
         self.assertNotEqual(self.q.pop(), None)
@@ -790,7 +819,7 @@ class TestQless(unittest.TestCase):
         #   3) Get the job, make sure it has 1 remaining
         #   4) Complete the job
         #   5) Get job, make sure it has 2 remaining
-        jid = self.q.put({'test':'retries_complete'}, retries=2)
+        jid = self.q.put(qless.Job, {'test':'retries_complete'}, retries=2)
         self.client.config.set('heartbeat', -10)
         job = self.q.pop()
         self.assertNotEqual(job, None)
@@ -808,7 +837,7 @@ class TestQless(unittest.TestCase):
         #   3) Get the job, make sure it has 1 remaining
         #   4) Re-put the job in the queue with job.move
         #   5) Get job, make sure it has 2 remaining
-        jid = self.q.put({'test':'retries_put'}, retries=2)
+        jid = self.q.put(qless.Job, {'test':'retries_put'}, retries=2)
         self.client.config.set('heartbeat', -10)
         job = self.q.pop()
         self.assertNotEqual(job, None)
@@ -827,7 +856,7 @@ class TestQless(unittest.TestCase):
         #   4) Ensure that failures and failed both increment
         #   5) Put that item back
         #   6) Ensure failed decremented, failures untouched
-        jid = self.q.put({'test':'stats_failed'})
+        jid = self.q.put(qless.Job, {'test':'stats_failed'})
         stats = self.q.stats()
         self.assertEqual(stats['failed'  ], 0)
         self.assertEqual(stats['failures'], 0)
@@ -849,7 +878,7 @@ class TestQless(unittest.TestCase):
         #   3) Ensure no retries in stats
         #   4) Pop job,
         #   5) Ensure one retry in stats
-        jid = self.q.put({'test':'stats_retries'})
+        jid = self.q.put(qless.Job, {'test':'stats_retries'})
         self.client.config.set('heartbeat', -10)
         job = self.q.pop()
         self.assertEqual(self.q.stats()['retries'], 0)
@@ -867,7 +896,7 @@ class TestQless(unittest.TestCase):
         #   4) Put the job back
         #   5) Check the stats with today, check failed = 0, failures = 0
         #   6) Check 'yesterdays' stats, check failed = 0, failures = 1
-        jid = self.q.put({'test':'stats_failed_original_day'})
+        jid = self.q.put(qless.Job, {'test':'stats_failed_original_day'})
         job = self.client.job(jid)
         job.fail('foo', 'bar')
         stats = self.q.stats()
@@ -898,7 +927,7 @@ class TestQless(unittest.TestCase):
         #   3) Pop that job
         #   4) Ensure unempty 'workers'
         #   5) Ensure unempty 'worker'
-        jid = self.q.put({'test':'workers'})
+        jid = self.q.put(qless.Job, {'test':'workers'})
         self.assertEqual(self.client.workers(), {})
         job = self.q.pop()
         workers = self.client.workers()
@@ -920,7 +949,7 @@ class TestQless(unittest.TestCase):
         #   3) Ensure 'workers' and 'worker' know about it
         #   4) Cancel job
         #   5) Ensure 'workers' and 'worker' reflect that
-        jid = self.q.put({'test':'workers_cancel'})
+        jid = self.q.put(qless.Job, {'test':'workers_cancel'})
         job = self.q.pop()
         self.assertEqual(self.client.workers(), [{
             'name'   : self.q.worker,
@@ -954,7 +983,7 @@ class TestQless(unittest.TestCase):
         #   3) Ensure 'workers' and 'worker' show it as stalled
         #   4) Pop the job with a different worker
         #   5) Ensure 'workers' and 'worker' reflect that
-        jid = self.q.put({'test':'workers_lost_lock'})
+        jid = self.q.put(qless.Job, {'test':'workers_lost_lock'})
         self.client.config.set('heartbeat', -10)
         job = self.q.pop()
         self.assertEqual(self.client.workers(), [{
@@ -990,7 +1019,7 @@ class TestQless(unittest.TestCase):
         #   2) Pop job, check 'workers', 'worker'
         #   3) Fail that job
         #   4) Check 'workers', 'worker'
-        jid = self.q.put({'test':'workers_fail'})
+        jid = self.q.put(qless.Job, {'test':'workers_fail'})
         job = self.q.pop()
         self.assertEqual(self.client.workers(), [{
             'name'   : self.q.worker,
@@ -1019,7 +1048,7 @@ class TestQless(unittest.TestCase):
         #   1) Put a job
         #   2) Pop a job, check 'workers', 'worker'
         #   3) Complete job, check 'workers', 'worker'
-        jid = self.q.put({'test':'workers_complete'})
+        jid = self.q.put(qless.Job, {'test':'workers_complete'})
         job = self.q.pop()
         self.assertEqual(self.client.workers(), [{
             'name'   : self.q.worker,
@@ -1049,7 +1078,7 @@ class TestQless(unittest.TestCase):
         #   1) Put a job
         #   2) Pop job, check 'workers', 'worker'
         #   3) Move job, check 'workers', 'worker'
-        jid = self.q.put({'test':'workers_reput'})
+        jid = self.q.put(qless.Job, {'test':'workers_reput'})
         job = self.q.pop()
         self.assertEqual(self.client.workers(), [{
             'name'   : self.q.worker,
@@ -1077,13 +1106,13 @@ class TestQless(unittest.TestCase):
         #   1) Put a job, pop it, check 'running'
         #   2) Put a job scheduled, check 'scheduled'
         #   3) Put a job with negative heartbeat, pop, check stalled
-        jid = self.q.put({'test': 'rss'})
+        jid = self.q.put(qless.Job, {'test': 'rss'})
         job = self.q.pop()
         self.assertEqual(self.q.running(), [jid])
-        jid = self.q.put({'test': 'rss'}, delay=60)
+        jid = self.q.put(qless.Job, {'test': 'rss'}, delay=60)
         self.assertEqual(self.q.scheduled(), [jid])
         self.client.config.set('heartbeat', -60)
-        jid = self.q.put({'test': 'rss'})
+        jid = self.q.put(qless.Job, {'test': 'rss'})
         job = self.q.pop()
         self.assertEqual(self.q.stalled(), [jid])
     

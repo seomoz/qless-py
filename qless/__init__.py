@@ -35,7 +35,7 @@ class client(object):
     
     def tracked(self):
         results = json.loads(self._track([], []))
-        results['jobs'] = [Job.parse(self, **j) for j in results['jobs']]
+        results['jobs'] = [Job(self, **j) for j in results['jobs']]
         return results
     
     def failed(self, group=None, start=0, limit=25):
@@ -48,7 +48,7 @@ class client(object):
             return json.loads(self._failed([], []))
         else:
             results = json.loads(self._failed([], [group, start, limit]))
-            results['jobs'] = [Job.parse(self, **j) for j in results['jobs']]
+            results['jobs'] = [Job(self, **j) for j in results['jobs']]
             return results
     
     def workers(self, worker=None):
@@ -63,7 +63,7 @@ class client(object):
         results = self._get([], [id])
         if not results:
             return None
-        return Job.parse(self, **json.loads(results))
+        return Job(self, **json.loads(results))
 
 from lua import lua
 from job import Job
