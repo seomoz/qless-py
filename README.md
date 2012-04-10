@@ -243,8 +243,8 @@ Qless maintains global configuration for certain pieces of data:
 
 1. `heartbeat` (60) | default heartbeat (seconds) for queues
 1. `heartbeat-<queue-name>` | heartbeat (seconds) for a specific queue
-<!-- 1. `stats-history` (30) | number of days for which to store summary stats
-1. `histogram-history` (7) | The number of days to store histogram data -->
+1. `stats-history` (30) | number of days for which to store summary stats
+1. `histogram-history` (7) | The number of days to store histogram data
 1. `jobs-history-count` (50k) --
 	How many jobs to keep data for after they're completed
 1. `jobs-history` (7 * 24 * 60 * 60) --
