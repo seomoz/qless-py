@@ -27,10 +27,10 @@ class Queue(object):
         # argument should be in how many seconds the instance should be considered 
         # actionable.'''
         return self.client._put([self.name], [
-            uuid.uuid1().hex,
+            uuid.uuid4().hex,
             klass.__module__ + '.' + klass.__name__,
             json.dumps(data),
-            time.time(),
+            repr(time.time()),
             priority or 0,
             json.dumps(tags or []),
             delay or 0,
@@ -43,7 +43,7 @@ class Queue(object):
         Passing in the queue from which to pull items, the current time, when the locks
         for these returned items should expire, and the number of items to be popped
         off.'''
-        results = [Job(self.client, **json.loads(j)) for j in self.client._pop([self.name], [self.worker, count or 1, time.time()])]
+        results = [Job(self.client, **json.loads(j)) for j in self.client._pop([self.name], [self.worker, count or 1, repr(time.time())])]
         if count == None:
             return (len(results) and results[0]) or None
         return results
@@ -53,7 +53,7 @@ class Queue(object):
         --------------------------
         Similar to the `Pop` command, except that it merely peeks at the next items
         in the queue.'''
-        results = [Job(self.client, **json.loads(r)) for r in self.client._peek([self.name], [count or 1, time.time()])]
+        results = [Job(self.client, **json.loads(r)) for r in self.client._peek([self.name], [count or 1, repr(time.time())])]
         if count == None:
             return (len(results) and results[0]) or None
         return results
@@ -77,16 +77,16 @@ class Queue(object):
         the minute resolution for the first hour, the 15-minute resolution for the first
         day, the hour resolution for the first 3 days, and then at the day resolution
         from there on out. The `histogram` key is a list of those values.'''
-        return json.loads(self.client._stats([], [self.name, date or time.time()]))
+        return json.loads(self.client._stats([], [self.name, date or repr(time.time())]))
     
     def running(self):
-        return self.client._jobs([], ['running', time.time(), self.name])
+        return self.client._jobs([], ['running', repr(time.time()), self.name])
     
     def stalled(self):
-        return self.client._jobs([], ['stalled', time.time(), self.name])
+        return self.client._jobs([], ['stalled', repr(time.time()), self.name])
     
     def scheduled(self):
-        return self.client._jobs([], ['scheduled', time.time(), self.name])
+        return self.client._jobs([], ['scheduled', repr(time.time()), self.name])
     
     def __len__(self):
         with self.client.redis.pipeline() as p:

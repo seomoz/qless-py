@@ -72,7 +72,7 @@ class Job(object):
     
     def ttl(self):
         '''How long until this expires, in seconds'''
-        return time.time() - self.expires
+        return repr(time.time()) - self.expires
     
     def move(self, queue):
         '''Put(1, queue, id, data, now, [priority, [tags, [delay]]])
@@ -91,7 +91,7 @@ class Job(object):
             self.jid,
             self.klass,
             json.dumps(self.data),
-            time.time()
+            repr(time.time())
         ])
     
     def complete(self, next=None, delay=None):
@@ -101,16 +101,16 @@ class Job(object):
         be considered waiting immediately.'''
         if next:
             return self.client._complete([], [self.jid, self.client.worker, self.queue,
-                time.time(), json.dumps(self.data), next, delay or 0]) or False
+                repr(time.time()), json.dumps(self.data), next, delay or 0]) or False
         else:
             return self.client._complete([], [self.jid, self.client.worker, self.queue,
-                time.time(), json.dumps(self.data)]) or False
+                repr(time.time()), json.dumps(self.data)]) or False
     
     def heartbeat(self):
         '''Heartbeat(0, id, worker, expiration, [data])
         -------------------------------------------
         Renew the heartbeat, if possible, and optionally update the job's user data.'''
-        return float(self.client._heartbeat([], [self.jid, self.client.worker, time.time(), json.dumps(self.data)]) or 0)
+        return float(self.client._heartbeat([], [self.jid, self.client.worker, repr(time.time()), json.dumps(self.data)]) or 0)
     
     def fail(self, group, message):
         '''Fail(0, id, worker, group, message, now, [data])
@@ -130,7 +130,7 @@ class Job(object):
         requests to heartbeat or complete that job will fail. Failed jobs are kept until
         they are canceled or completed. __Returns__ the id of the failed job if successful,
         or `False` on failure.'''
-        return self.client._fail([], [self.jid, self.client.worker, group, message, time.time(), json.dumps(self.data)]) or False
+        return self.client._fail([], [self.jid, self.client.worker, group, message, repr(time.time()), json.dumps(self.data)]) or False
     
     def cancel(self):
         '''Cancel(0, id)
@@ -141,9 +141,9 @@ class Job(object):
         return self.client._cancel([], [self.jid])
     
     def track(self, *tags):
-        args = ['track', self.jid, time.time()]
+        args = ['track', self.jid, repr(time.time())]
         args.extend(tags)
         return self.client._track([], args)
     
     def untrack(self):
-        return self.client._track([], ['untrack', self.jid, time.time()])
+        return self.client._track([], ['untrack', self.jid, repr(time.time())])

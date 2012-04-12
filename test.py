@@ -171,17 +171,16 @@ class TestQless(unittest.TestCase):
         #   3) Put more jobs
         #   4) Pop until empty, saving jids
         #   5) Ensure popped jobs are in the same order
-        self.assertEqual(len(self.q), 0, 'Start with an empty queue')
-        jids = [self.q.put(qless.Job, {'test':'put_pop_order', 'count':c}) for c in range(20)]
-        popped = [job.jid for job in [self.q.pop() for c in range(10)]]
-        for i in range(10):
-            jids.extend(self.q.put(qless.Job, {'test':'put_pop_order', 'count':c}, priority=i) for c in range(10))
-            popped.extend([job.jid for job in self.q.pop(5)])
-        next = self.q.pop()
-        while next:
-            popped.append(next.jid)
-            next = self.q.pop()
+        jids   = []
+        popped = []
+        for count in range(100):
+            jids.append(self.q.put(qless.Job, {'test': 'put_pop_order', 'count': 2 * count }))
+            self.q.peek()
+            jids.append(self.q.put(FooJob, {'test': 'put_pop_order', 'count': 2 * count+ 1 }))
+            popped.append(self.q.pop().jid)
+            self.q.peek()
         
+        popped.extend(self.q.pop().jid for i in range(100))
         self.assertEqual(jids, popped)
     
     def test_scheduled(self):
@@ -325,7 +324,6 @@ class TestQless(unittest.TestCase):
         #   1) put a job
         #   2) peek said job, check existence of attributes
         jid = self.q.put(qless.Job, {'test': 'test_put_pop_attributes'})
-        self.client.config.set('heartbeat', 60)
         job = self.q.peek()
         self.assertEqual(job.data     , {'test': 'test_put_pop_attributes'})
         self.assertEqual(job.worker   , '')
