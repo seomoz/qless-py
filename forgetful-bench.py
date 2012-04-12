@@ -86,7 +86,7 @@ cpuBefore = client.redis.info()['used_cpu_user'] + client.redis.info()['used_cpu
 putTime = -time.time()
 # Alright, let's make a bunch of jobs
 testing = client.queue('testing')
-jids = [testing.put({'test': 'benchmark', 'count': c, 'stages':args.stages}, retries=args.retries) for c in range(args.numJobs)]
+jids = [testing.put(qless.Job, {'test': 'benchmark', 'count': c, 'stages':args.stages}, retries=args.retries) for c in range(args.numJobs)]
 putTime += time.time()
 
 # This is how long it took to run the workers
