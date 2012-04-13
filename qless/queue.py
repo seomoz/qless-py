@@ -13,7 +13,7 @@ class Queue(object):
         self.worker  = worker
         self._hb     = 60
     
-    def put(self, klass, data, priority=None, tags=None, delay=None, retries=None):
+    def put(self, klass, data, priority=None, tags=None, delay=None, retries=None, jid=None):
         # '''Put(1, queue, id, data, now, [priority, [tags, [delay, [retries]]]])
         # -----------------------------------------------------------------------
         # Either create a new job in the provided queue with the provided attributes,
@@ -27,7 +27,7 @@ class Queue(object):
         # argument should be in how many seconds the instance should be considered 
         # actionable.'''
         return self.client._put([self.name], [
-            uuid.uuid4().hex,
+            jid or uuid.uuid4().hex,
             klass.__module__ + '.' + klass.__name__,
             json.dumps(data),
             repr(time.time()),

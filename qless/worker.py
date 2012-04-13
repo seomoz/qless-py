@@ -20,6 +20,8 @@ class Worker(Process):
         self.sandbox  = sandbox
         if not os.path.isdir(self.sandbox):
             os.makedirs(self.sandbox)
+        # Make sure our sandbox is nice and tidy and ready for business!
+        self.clean()
     
     def healthy(self):
         # Here we might look for RAM consumption, etc.
@@ -48,7 +50,7 @@ class Worker(Process):
                     job = queue.pop()
                     if job:
                         seen = True
-                        self.clean()
+                        logger.info('Processing %s in %s' % (job.jid, queue.name))
                         job.process()
                         self.clean()
                     if not seen:
@@ -100,7 +102,6 @@ class Master(object):
                 # Sleep for a little while, and then check up on the health of all
                 # the worker processes.
                 time.sleep(60)
-                logger.info('Checking workers')
                 healthy   = []
                 unhealthy = []
                 for worker in self.workers:
