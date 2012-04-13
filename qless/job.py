@@ -1,5 +1,7 @@
 #! /usr/bin/env python
 
+import os
+import imp
 import uuid
 import time
 import types
@@ -8,6 +10,28 @@ import simplejson as json
 
 # The Job class
 class Job(object):
+    # This is a dictionary of all the classes that we've seen, and
+    # the last load time for each of them. We'll use this either for
+    # the debug mode or the general mechanism
+    _loaded = {}
+    
+    @staticmethod
+    def _import(klass):
+        # 1) Get a reference to the module
+        # 2) Check the file that module's imported from
+        # 3) If that file's been updated, force a reload of that module, return it
+        mod = __import__(klass.rpartition('.')[0])
+        for m in klass.split('.')[1:-1]:
+            mod = getattr(mod, m)
+        
+        # Alright, now check the file associated with it
+        mtime = os.stat(mod.__file__).st_mtime
+        Job._loaded[klass] = min(Job._loaded.get(klass, 1e20), time.time())
+        if Job._loaded[klass] < mtime:
+            mod = reload(mod)
+        
+        return getattr(mod, klass.rpartition('.')[2])
+    
     def __init__(self, client, **kwargs):
         self.client = client
         for att in ['data', 'jid', 'klass', 'priority', 'tags', 'worker', 'expires',
@@ -47,12 +71,7 @@ class Job(object):
         return '<%s %s>' % (self.klass, self.jid)
     
     def process(self):
-        # First, let's try to find the class that is responsible for handling this job
-        mod = __import__(self.klass.rpartition('.')[0])
-        for m in self.klass.split('.')[1:-1]:
-            mod = getattr(mod, m)
-        mod = getattr(mod, self.klass.rpartition('.')[2])
-        
+        mod = Job._import(self.klass)
         # Based on the queue that this was in, we should call the appropriate
         # method. So if it was in the 'testing' queue, we should call 'testing'
         # If it doesn't have the appropriate function, we'll call process on it

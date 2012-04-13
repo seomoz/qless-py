@@ -7,6 +7,12 @@ import logging
 import simplejson as json
 
 logger = logging.getLogger('qless')
+formatter = logging.Formatter('%(asctime)s | PID %(process)d | [%(levelname)s] %(message)s')
+handler = logging.StreamHandler()
+handler.setLevel(logging.DEBUG)
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+logger.setLevel(logging.INFO)
 
 class client(object):
     def __init__(self, host='localhost', port=6379, hostname = None, **kwargs):

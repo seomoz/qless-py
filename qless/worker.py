@@ -3,30 +3,42 @@
 import os
 import time
 import qless
+import shutil
 import psutil
 import signal
 import logging
+from qless import logger
 from multiprocessing import Process
-
-logger = logging.getLogger('qless')
-formatter = logging.Formatter('%(asctime)s | PID %(process)d | [%(levelname)s] %(message)s')
-handler = logging.StreamHandler()
-handler.setLevel(logging.DEBUG)
-handler.setFormatter(formatter)
-logger.addHandler(handler)
-logger.setLevel(logging.INFO)
 
 class Worker(Process):
     # This is a class that processes jobs from various queues
-    def __init__(self, client, interval, queues):
-        self.client   = client
-        self.interval = interval
-        self.queues   = [client.queue(q) for q in queues]
+    def __init__(self, queues, interval, sandbox):
         Process.__init__(self, target=self.loop)
+        self.queues   = queues
+        self.interval = interval
+        # Our sandbox. Make sure that the directory exists
+        self.sandbox  = sandbox
+        if not os.path.isdir(self.sandbox):
+            os.makedirs(self.sandbox)
     
     def healthy(self):
         # Here we might look for RAM consumption, etc.
         return self.is_alive()
+    
+    def clean(self):
+        # This cleans the sandbox -- changing the working directory to it,
+        # as well as clearing out any files that might be in there
+        # Make sure we're running in our sandbox
+        os.chdir(self.sandbox)
+        # And that it's clear of any files
+        for p in os.listdir(self.sandbox):
+            p = os.path.join(self.sandbox, p)
+            if os.path.isdir(p):
+                logger.info('Removing tree %s...' % p)
+                shutil.rmtree(p)
+            else:
+                logger.info('Removing file %s...' % p)
+                os.remove(p)
     
     def loop(self):
         while True:
@@ -36,8 +48,9 @@ class Worker(Process):
                     job = queue.pop()
                     if job:
                         seen = True
+                        self.clean()
                         job.process()
-                
+                        self.clean()
                     if not seen:
                         time.sleep(self.interval)
             except KeyboardInterrupt:
@@ -45,19 +58,19 @@ class Worker(Process):
 
 class Master(object):
     # This class is responsible for managing several children workers
-    def __init__(self, host, port, workers, interval, queues):
-        self.client   = qless.client(host, port)
-        self.count    = workers
-        self.interval = interval
-        self.queues   = queues
-        self.workers  = []
-    
-    def pop(self):
-        for i in range(len(self._queues)):
-            q = iter(self.queues).next()
-            job = q.pop()
-            if job:
-                return job
+    def __init__(self, queues, host='localhost', port=6579, workers=None, interval=60, workdir='.'):
+        self.client    = qless.client(host, port)
+        self.count     = workers or psutil.NUM_CPUS
+        self.interval  = interval
+        self.queues    = [self.client.queue(q) for q in queues]
+        self.workers   = []
+        # This is for filesystem sandboxing. Each worker has
+        # a directory associated with it, which it should make
+        # sure is the working directory in which it runs each
+        # of the jobs. It should also ensure that the directory
+        # exists, and clobbers files before each run, and after.
+        self.workdir   = os.path.abspath(workdir)
+        self.sandboxes = [os.path.join(self.workdir, 'qless-py-workers', 'sandbox-%i' % i) for i in range(self.count)]
     
     def stop(self, workers=None):
         # Stop all the workers, and then wait for them
@@ -70,9 +83,11 @@ class Master(object):
         for worker in workers:
             worker.join()
             logger.warn('Worker %i stopped' % worker.pid)
+            # And return its sandbox to the pool of sandboxes
+            self.sandboxes.append(worker.sandbox)
     
     def spawn(self, count):
-        workers = [Worker(self.client, self.interval, self.queues) for i in range(count)]
+        workers = [Worker(self.queues, self.interval, self.sandboxes.pop(0)) for i in range(count)]
         self.workers.extend(workers)
         for worker in workers:
             worker.start()

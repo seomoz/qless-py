@@ -136,10 +136,53 @@ __By way of a quick note__, it's important that your job class can be imported -
 create a job class in an interactive prompt, for example. You can _add_ jobs in an interactive
 prompt, but just can't define new job types.
 
+Running
+-------
 All that remains is to have workers actually run these jobs. This distribution comes with a
 script to help with this:
 
-	qless-worker --queue underpants --queue unknown --queue profit
+	qless-py-worker --queue underpants --queue unknown --queue profit
+
+This script actually forks off several subprocesses that perform the work, and the original
+process keeps tabs on them to ensure that they are all up and running. In the future, the
+parent process might also perform other sanity checks, but for the time being, it's just
+that the process is still alive. You can specify the `host` and `port` you want to use for
+the qless server as well:
+
+	qless-py-worker --host foo.bar --port 1234 ...
+
+In the absence of the `--workers` argument, qless will spawn as many workers as there are 
+cores on the machine. The interval specifies how often to poll (in seconds) for work items.
+Future versions may have a mechanism to support blocking pop.
+
+	qless-py-worker --workers 4 --interval 10
+
+Because this works on a forked process model, it can be convenient to import large modules
+_before_ subprocesses are forked. Specify these with `--import`:
+
+	qless-py-worker --import my.really.bigModule
+
+Filesystem
+----------
+Each worker runs in a sandbox directory that:
+
+1. Clobbers any files in it left _after_ running a job
+1. Clobbers any files in it _before_ running a job
+
+The worker runs in the context of that directory, so when you create files like this,
+
+	with file('foo.txt') as f:
+		...
+
+they get created in the worker's sandbox. This can be useful for storing temporary files,
+but it also means that any files that need to persist should either be put somewhere 
+specific, or uploaded somewhere, etc. These sandboxes have the form
+`<workdir>/qless-py-workers/sandbox-<k>/`, so when running the worker, you can specify a
+particular working directory as the base,
+
+	qless-py-worker --workdir /home/foo/awesome-project
+
+which would yield sandboxes `/home/foo/awesome-project/qless-py-workers/sandbox-<k>`.
 
 Internals and Additional Features
 =================================

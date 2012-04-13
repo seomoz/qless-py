@@ -20,19 +20,24 @@ parser.add_argument('--import', dest='imports', action='append', default=[],
     help='The modules to preemptively import')
 parser.add_argument('--interval', dest='interval', default=60, type=int,
     help='The polling interval')
+parser.add_argument('--workdir', dest='workdir', default='.',
+    help='The base work directory path')
 
 args = parser.parse_args()
 
 import os
 import sys
 import qless
-from qless import worker
+from qless import worker, logger
 
 # Now let's add each of the paths to the python search path
 sys.path.extend([os.path.abspath(p) for p in args.paths])
 
 # Now let's import all the modules and packages we've been asked to import
 for i in args.imports:
-    pass
+    try:
+        logger.info('Loaded %s' % repr(__import__(i)))
+    except Exception:
+        logger.exception('Failed to import %s' % i)
 
-worker.Master(args.host, args.port, args.workers, args.interval, args.queues).run()
+worker.Master(args.queues, args.host, args.port, args.workers, args.interval, args.workdir).run()
