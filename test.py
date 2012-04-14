@@ -1307,21 +1307,29 @@ class TestEverything(TestQless):
             'stalled': {}
         })
     
-    def test_running_stalled_scheduled(self):
+    def test_running_stalled_scheduled_depends(self):
         # Make sure that we can get a list of jids for a queue that
         # are running, stalled and scheduled
         #   1) Put a job, pop it, check 'running'
         #   2) Put a job scheduled, check 'scheduled'
         #   3) Put a job with negative heartbeat, pop, check stalled
-        jid = self.q.put(qless.Job, {'test': 'rss'})
-        job = self.q.pop()
-        self.assertEqual(self.q.running(), [jid])
-        jid = self.q.put(qless.Job, {'test': 'rss'}, delay=60)
-        self.assertEqual(self.q.scheduled(), [jid])
+        #   4) Put a job dependent on another and check 'depends'
+        self.assertEqual(len(self.q), 0)
+        # Now, we need to check pagination
+        jids = [self.q.put(qless.Job, {'test': 'rssd'}) for i in range(20)]
         self.client.config.set('heartbeat', -60)
-        jid = self.q.put(qless.Job, {'test': 'rss'})
-        job = self.q.pop()
-        self.assertEqual(self.q.stalled(), [jid])    
+        jobs = self.q.pop(20)
+        self.assertEqual(set(self.q.stalled(0, 10) + self.q.stalled(10, 10)), set(jids))
+        
+        self.client.config.set('heartbeat', 60)
+        jobs = self.q.pop(20)
+        self.assertEqual(set(self.q.running(0, 10) + self.q.running(10, 10)), set(jids))
+        
+        jids = [self.q.put(qless.Job, {'test': 'rssd'}, delay=60) for i in range(20)]
+        self.assertEqual(set(self.q.scheduled(0, 10) + self.q.scheduled(10, 10)), set(jids))
+        
+        deps = [self.q.put(qless.Job, {'test': 'rssd'}, depends=jids) for i in range(20)]
+        self.assertEqual(set(self.q.depends(0, 10) + self.q.depends(10, 10)), set(deps))
     
     # ==================================================================
     # In these tests, we want to ensure that if we don't provide enough

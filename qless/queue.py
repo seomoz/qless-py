@@ -80,17 +80,17 @@ class Queue(object):
         from there on out. The `histogram` key is a list of those values.'''
         return json.loads(self.client._stats([], [self.name, date or repr(time.time())]))
     
-    def running(self):
-        return self.client._jobs([], ['running', repr(time.time()), self.name])
+    def running(self, offset=0, count=25):
+        return self.client._jobs([], ['running', repr(time.time()), self.name, offset, count])
     
-    def stalled(self):
-        return self.client._jobs([], ['stalled', repr(time.time()), self.name])
+    def stalled(self, offset=0, count=25):
+        return self.client._jobs([], ['stalled', repr(time.time()), self.name, offset, count])
     
-    def scheduled(self):
-        return self.client._jobs([], ['scheduled', repr(time.time()), self.name])
+    def scheduled(self, offset=0, count=25):
+        return self.client._jobs([], ['scheduled', repr(time.time()), self.name, offset, count])
     
-    def depends(self):
-        return self.client._jobs([], ['depends', repr(time.time()), self.name])
+    def depends(self, offset=0, count=25):
+        return self.client._jobs([], ['depends', repr(time.time()), self.name, offset, count])
     
     def __len__(self):
         with self.client.redis.pipeline() as p:
