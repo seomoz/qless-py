@@ -13,7 +13,7 @@ class Queue(object):
         self.worker  = worker
         self._hb     = 60
     
-    def put(self, klass, data, priority=None, tags=None, delay=None, retries=None, jid=None):
+    def put(self, klass, data, priority=None, tags=None, delay=None, retries=None, jid=None, depends=None):
         # '''Put(1, queue, id, data, now, [priority, [tags, [delay, [retries]]]])
         # -----------------------------------------------------------------------
         # Either create a new job in the provided queue with the provided attributes,
@@ -31,10 +31,11 @@ class Queue(object):
             klass.__module__ + '.' + klass.__name__,
             json.dumps(data),
             repr(time.time()),
-            priority or 0,
-            json.dumps(tags or []),
             delay or 0,
-            retries or 5
+            'priority', priority or 0,
+            'tags', json.dumps(tags or []),
+            'retries', retries or 5,
+            'depends', json.dumps(depends or [])
         ])
     
     def pop(self, count=None):
@@ -87,6 +88,9 @@ class Queue(object):
     
     def scheduled(self):
         return self.client._jobs([], ['scheduled', repr(time.time()), self.name])
+    
+    def depends(self):
+        return self.client._jobs([], ['depends', repr(time.time()), self.name])
     
     def __len__(self):
         with self.client.redis.pipeline() as p:

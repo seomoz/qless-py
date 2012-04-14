@@ -37,7 +37,300 @@ class TestQless(unittest.TestCase):
     
     def tearDown(self):
         self.redis.flushdb()
+
+class TestDependencies(TestQless):
+    def test_depends_put(self):
+        # In this test, we want to put a job, and put a second job
+        # that depends on it. We'd then like to verify that it's 
+        # only available for popping once its dependency has completed
+        jid = self.q.put(qless.Job, {'test': 'depends_put'})
+        job = self.q.pop()
+        jid = self.q.put(qless.Job, {'test': 'depends_put'}, depends=[job.jid])
+        self.assertEqual(self.q.pop(), None)
+        self.assertEqual(self.client.job(jid).state, 'depends')
+        job.complete()
+        self.assertEqual(self.client.job(jid).state, 'waiting')
+        self.assertEqual(self.q.pop().jid, jid)
+        
+        # Let's try this dance again, but with more job dependencies
+        jids = [self.q.put(qless.Job, {'test': 'depends_put'}) for i in range(10)]
+        jid  = self.q.put(qless.Job, {'test': 'depends_put'}, depends=jids)
+        # Pop more than we put on
+        jobs = self.q.pop(20)
+        self.assertEqual(len(jobs), 10)
+        # Complete them, and then make sure the last one's available
+        for job in jobs:
+            self.assertEqual(self.q.pop(), None)
+            job.complete()
+        
+        # It's only when all the dependencies have been completed that
+        # we should be able to pop this job off
+        self.assertEqual(self.q.pop().jid, jid)
     
+    def test_depends_complete(self):
+        # In this test, we want to put a job, put a second job, and
+        # complete the first job, making it dependent on the second
+        # job. This should test the ability to add dependency during
+        # completion
+        a = self.q.put(qless.Job, {'test': 'depends_complete'})
+        b = self.q.put(qless.Job, {'test': 'depends_complete'})
+        job = self.q.pop()
+        job.complete('testing', depends=[b])
+        self.assertEqual(self.client.job(a).state, 'depends')
+        jobs = self.q.pop(20)
+        self.assertEqual(len(jobs), 1)
+        jobs[0].complete()
+        self.assertEqual(self.client.job(a).state, 'waiting')
+        job = self.q.pop()
+        self.assertEqual(job.jid, a)
+        
+        # Like above, let's try this dance again with more dependencies
+        jids = [self.q.put(qless.Job, {'test': 'depends_put'}) for i in range(10)]
+        jid  = job.jid
+        job.complete('testing', depends=jids)
+        # Pop more than we put on
+        jobs = self.q.pop(20)
+        self.assertEqual(len(jobs), 10)
+        # Complete them, and then make sure the last one's available
+        for job in jobs:
+            j = self.q.pop()
+            if j:
+                print '%s => %s' % (j.jid, jid)
+            self.assertEqual(j, None)
+            job.complete()
+        
+        # It's only when all the dependencies have been completed that
+        # we should be able to pop this job off
+        self.assertEqual(self.q.pop().jid, jid)
+    
+    def test_depends_state(self):
+        # Put a job, and make it dependent on a canceled job, and a
+        # non-existent job, and a complete job. It should be available
+        # from the start.
+        jids = ['foobar', 
+            self.q.put(qless.Job, {'test': 'test_depends_state'}),
+            self.q.put(qless.Job, {'test': 'test_depends_state'})]
+        
+        # Cancel one, complete one
+        self.q.pop().cancel()
+        self.q.pop().complete()
+        # Ensure there are none in the queue, then put one, should pop right off
+        self.assertEqual(len(self.q), 0)
+        jid = self.q.put(qless.Job, {'test': 'test_depends_state'}, depends=jids)
+        self.assertEqual(self.q.pop().jid, jid)
+    
+    def test_depends_canceled(self):
+        # B is dependent on A, but then we cancel B, then A is still
+        # able to complete without any problems. If you try to cancel
+        # a job that others depend on, you should have an exception thrown
+        a = self.q.put(qless.Job, {'test': 'test_depends_canceled'})
+        b = self.q.put(qless.Job, {'test': 'test_depends_canceled'}, depends=[a])
+        self.client.job(b).cancel()
+        job = self.q.pop()
+        self.assertEqual(job.jid, a)
+        self.assertEqual(job.complete(), 'complete')
+        self.assertEqual(self.q.pop(), None)
+        
+        a = self.q.put(qless.Job, {'test': 'cancel_dependency'})
+        b = self.q.put(qless.Job, {'test': 'cancel_dependency'}, depends=[a])
+        self.assertRaises(Exception, self.client.job(a).cancel)
+    
+    def test_depends_complete_advance(self):
+        # If we make B depend on A, and then move A through several
+        # queues, then B should only be availble once A has finished
+        # its whole run.
+        a = self.q.put(qless.Job, {'test': 'test_depends_advance'})
+        b = self.q.put(qless.Job, {'test': 'test_depends_advance'}, depends=[a])
+        for i in range(10):
+            job = self.q.pop()
+            self.assertEqual(job.jid, a)
+            job.complete('testing')
+        
+        self.q.pop().complete()
+        self.assertEqual(self.q.pop().jid, b)
+    
+    def test_cascading_dependency(self):
+        # If we make a dependency chain, then we validate that we can
+        # only access them one at a time, in the order of their dependency
+        jids = [self.q.put(qless.Job, {'test': 'cascading_depencency'})]
+        for i in range(10):
+            jids.append(self.q.put(qless.Job, {'test': 'cascading_dependency'}, depends=[jids[-1]]))
+        
+        # Pop off the first 10 dependencies, ensuring only one comes off at a time
+        for i in range(11):
+            jobs = self.q.pop(10)
+            self.assertEqual(len(jobs), 1)
+            self.assertEqual(jobs[0].jid, jids[i])
+            jobs[0].complete()
+    
+    def test_move_dependency(self):
+        # If we put a job into a queue with dependencies, and then 
+        # move it to another queue, then all the original dependencies
+        # should be honored. The reason for this is that dependencies
+        # can always be removed after the fact, but this prevents us
+        # from the running the risk of moving a job, and it getting 
+        # popped before we can describe its dependencies
+        a = self.q.put(qless.Job, {'test': 'move_dependency'})
+        b = self.q.put(qless.Job, {'test': 'move_dependency'}, depends=[a])
+        self.client.job(b).move('other')
+        self.assertEqual(self.client.job(b).state, 'depends')
+        self.assertEqual(self.other.pop(), None)
+        self.q.pop().complete()
+        self.assertEqual(self.client.job(b).state, 'waiting')
+        self.assertEqual(self.other.pop().jid, b)
+    
+    def test_add_dependency(self):
+        # If we have a job that already depends on on other jobs, then
+        # we should be able to add more dependencies. If it's not, then
+        # we can't
+        a = self.q.put(qless.Job, {'test': 'add_dependency'})
+        b = self.client.job(self.q.put(qless.Job, {'test': 'add_dependency'}, depends=[a]))
+        c = self.q.put(qless.Job, {'test': 'add_dependency'})
+        self.assertEqual(b.depend(c), True)
+        
+        jobs = self.q.pop(20)
+        self.assertEqual(len(jobs), 2)
+        self.assertEqual(jobs[0].jid, a)
+        self.assertEqual(jobs[1].jid, c)
+        jobs[0].complete(); jobs[1].complete()
+        job = self.q.pop()
+        self.assertEqual(job.jid, b.jid)
+        job.complete()
+        
+        # If the job's put, but waiting, we can't add dependencies
+        a = self.q.put(qless.Job, {'test': 'add_dependency'})
+        b = self.q.put(qless.Job, {'test': 'add_dependency'})
+        self.assertEqual(self.client.job(a).depend(b), False)
+        job = self.q.pop()
+        self.assertEqual(job.depend(b), False)
+        job.fail('what', 'something')
+        self.assertEqual(self.client.job(job.jid).depend(b), False)
+    
+    def test_remove_dependency(self):
+        # If we have a job that already depends on others, then we should
+        # we able to remove them. If it's not dependent on any, then we can't.
+        a = self.q.put(qless.Job, {'test': 'remove_dependency'})
+        b = self.client.job(self.q.put(qless.Job, {'test': 'remove_dependency'}, depends=[a]))
+        self.assertEqual(len(self.q.pop(20)), 1)
+        b.undepend(a)
+        self.assertEqual(self.q.pop().jid, b.jid)
+        
+        # Let's try removing /all/ dependencies
+        jids = [self.q.put(qless.Job, {'test': 'remove_dependency'}) for i in range(10)]
+        b = self.client.job(self.q.put(qless.Job, {'test': 'remove_dependency'}, depends=jids))
+        self.assertEqual(len(self.q.pop(20)), 10)
+        b.undepend(all=True)
+        self.assertEqual(self.client.job(b.jid).state, 'waiting')
+        
+        # If the job's put, but waiting, we can't add dependencies
+        a = self.q.put(qless.Job, {'test': 'add_dependency'})
+        b = self.q.put(qless.Job, {'test': 'add_dependency'})
+        self.assertEqual(self.client.job(a).undepend(b), False)
+        job = self.q.pop()
+        self.assertEqual(job.undepend(b), False)
+        job.fail('what', 'something')
+        self.assertEqual(self.client.job(job.jid).undepend(b), False)
+    
+    def test_jobs_depends(self):
+        # When we have jobs that have dependencies, we should be able to
+        # get access to them.
+        a = self.q.put(qless.Job, {'test': 'jobs_depends'})
+        b = self.q.put(qless.Job, {'test': 'jobs_depends'}, depends=[a])
+        self.assertEqual(self.client.queues()[0]['depends'], 1)
+        self.assertEqual(self.client.queues('testing')['depends'], 1)
+        self.assertEqual(self.q.depends(), [b])
+
+class TestFail(TestQless):
+    def test_fail_failed(self):
+        # In this test, we want to make sure that we can correctly 
+        # fail a job
+        #   1) Put a job
+        #   2) Fail a job
+        #   3) Ensure the queue is empty, and that there's something
+        #       in the failed endpoint
+        #   4) Ensure that the job still has its original queue
+        self.assertEqual(len(self.q), 0, 'Start with an empty queue')
+        self.assertEqual(len(self.client.failed()), 0)
+        jid = self.q.put(qless.Job, {'test': 'fail_failed'})
+        job = self.q.pop()
+        job.fail('foo', 'Some sort of message')
+        self.assertEqual(self.q.pop(), None)
+        self.assertEqual(self.client.failed(), {
+            'foo': 1
+        })
+        results = self.client.failed('foo')
+        self.assertEqual(results['total'], 1)
+        job = results['jobs'][0]
+        self.assertEqual(job.jid      , jid)
+        self.assertEqual(job.queue    , 'testing')
+        self.assertEqual(job.data     , {'test': 'fail_failed'})
+        self.assertEqual(job.worker   , '')
+        self.assertEqual(job.state    , 'failed')
+        self.assertEqual(job.queue    , 'testing')
+        self.assertEqual(job.remaining, 5)
+        self.assertEqual(job.retries  , 5)
+        self.assertEqual(job.klass    , 'qless.job.Job')
+        self.assertEqual(job.tags     , [])
+    
+    def test_pop_fail(self):
+        # In this test, we want to make sure that we can pop a job,
+        # fail it, and then we shouldn't be able to complete /or/ 
+        # heartbeat the job
+        #   1) Put a job
+        #   2) Fail a job
+        #   3) Heartbeat to job fails
+        #   4) Complete job fails
+        self.assertEqual(len(self.q), 0, 'Start with an empty queue')
+        self.assertEqual(len(self.client.failed()), 0)
+        jid = self.q.put(qless.Job, {'test': 'pop_fail'})
+        job = self.q.pop()
+        self.assertNotEqual(job, None)
+        job.fail('foo', 'Some sort of message')
+        self.assertEqual(len(self.q), 0)
+        self.assertEqual(job.heartbeat(), False)
+        self.assertEqual(job.complete() , False)
+        self.assertEqual(self.client.failed(), {
+            'foo': 1
+        })
+        results = self.client.failed('foo')
+        self.assertEqual(results['total'], 1)
+        self.assertEqual(results['jobs'][0].jid, jid)
+    
+    def test_fail_state(self):
+        # We shouldn't be able to fail a job that's in any state but
+        # running
+        self.assertEqual(len(self.client.failed()), 0)
+        job = self.client.job(self.q.put(qless.Job, {'test': 'fail_state'}))
+        self.assertEqual(job.fail('foo', 'Some sort of message'), False)
+        self.assertEqual(len(self.client.failed()), 0)
+        job = self.client.job(self.q.put(qless.Job, {'test': 'fail_state'}, delay=60))
+        self.assertEqual(job.fail('foo', 'Some sort of message'), False)
+        self.assertEqual(len(self.client.failed()), 0)        
+        jid = self.q.put(qless.Job, {'test': 'fail_complete'})
+        job = self.q.pop()
+        job.complete()
+        self.assertEqual(job.fail('foo', 'Some sort of message'), False)
+        self.assertEqual(len(self.client.failed()), 0)
+    
+    def test_put_failed(self):
+        # In this test, we want to make sure that if we put a job
+        # that has been failed, we want to make sure that it is
+        # no longer reported as failed
+        #   1) Put a job
+        #   2) Fail that job
+        #   3) Make sure we get failed stats
+        #   4) Put that job on again
+        #   5) Make sure that we no longer get failed stats
+        self.assertEqual(len(self.q), 0, 'Start with an empty queue')
+        jid = self.q.put(qless.Job, {'test': 'put_failed'})
+        job = self.q.pop()
+        job.fail('foo', 'some message')
+        self.assertEqual(self.client.failed(), {'foo':1})
+        job.move('testing')
+        self.assertEqual(len(self.q), 1)
+        self.assertEqual(self.client.failed(), {})
+
+class TestEverything(TestQless):    
     def test_config(self):
         # Set this particular configuration value
         config = self.client.config
@@ -143,24 +436,6 @@ class TestQless(unittest.TestCase):
             job = self.q.pop()
             self.assertTrue(job['count'] < last, 'We should see jobs in reverse order')
             last = job['count']
-    
-    def test_put_failed(self):
-        # In this test, we want to make sure that if we put a job
-        # that has been failed, we want to make sure that it is
-        # no longer reported as failed
-        #   1) Put a job
-        #   2) Fail that job
-        #   3) Make sure we get failed stats
-        #   4) Put that job on again
-        #   5) Make sure that we no longer get failed stats
-        self.assertEqual(len(self.q), 0, 'Start with an empty queue')
-        jid = self.q.put(qless.Job, {'test': 'put_failed'})
-        job = self.client.job(jid)
-        job.fail('foo', 'some message')
-        self.assertEqual(self.client.failed(), {'foo':1})
-        job.move('testing')
-        self.assertEqual(len(self.q), 1)
-        self.assertEqual(self.client.failed(), {})
     
     def test_same_priority_order(self):
         # In this test, we want to make sure that jobs are popped
@@ -363,74 +638,7 @@ class TestQless(unittest.TestCase):
         self.assertTrue((bjob.heartbeat() + 11) >= time.time())
         self.assertEqual(ajob.heartbeat(), False)
     
-    def test_fail_failed(self):
-        # In this test, we want to make sure that we can correctly 
-        # fail a job
-        #   1) Put a job
-        #   2) Fail a job
-        #   3) Ensure the queue is empty, and that there's something
-        #       in the failed endpoint
-        #   4) Ensure that the job still has its original queue
-        self.assertEqual(len(self.q), 0, 'Start with an empty queue')
-        self.assertEqual(len(self.client.failed()), 0)
-        jid = self.q.put(qless.Job, {'test': 'fail_failed'})
-        job = self.client.job(jid)
-        job.fail('foo', 'Some sort of message')
-        self.assertEqual(self.q.pop(), None)
-        self.assertEqual(self.client.failed(), {
-            'foo': 1
-        })
-        results = self.client.failed('foo')
-        self.assertEqual(results['total'], 1)
-        job = results['jobs'][0]
-        self.assertEqual(job.jid      , jid)
-        self.assertEqual(job.queue    , 'testing')
-        self.assertEqual(job.data     , {'test': 'fail_failed'})
-        self.assertEqual(job.worker   , '')
-        self.assertEqual(job.state    , 'failed')
-        self.assertEqual(job.queue    , 'testing')
-        self.assertEqual(job.remaining, 5)
-        self.assertEqual(job.retries  , 5)
-        self.assertEqual(job.klass    , 'qless.job.Job')
-        self.assertEqual(job.tags     , [])
-    
-    def test_pop_fail(self):
-        # In this test, we want to make sure that we can pop a job,
-        # fail it, and then we shouldn't be able to complete /or/ 
-        # heartbeat the job
-        #   1) Put a job
-        #   2) Fail a job
-        #   3) Heartbeat to job fails
-        #   4) Complete job fails
-        self.assertEqual(len(self.q), 0, 'Start with an empty queue')
-        self.assertEqual(len(self.client.failed()), 0)
-        jid = self.q.put(qless.Job, {'test': 'pop_fail'})
-        job = self.q.pop()
-        self.assertNotEqual(job, None)
-        job.fail('foo', 'Some sort of message')
-        self.assertEqual(len(self.q), 0)
-        self.assertEqual(job.heartbeat(), False)
-        self.assertEqual(job.complete() , False)
-        self.assertEqual(self.client.failed(), {
-            'foo': 1
-        })
-        results = self.client.failed('foo')
-        self.assertEqual(results['total'], 1)
-        self.assertEqual(results['jobs'][0].jid, jid)
-    
-    def test_fail_complete(self):
-        # Make sure that if we complete a job, we cannot fail it.
-        #   1) Put a job
-        #   2) Pop a job
-        #   3) Complete said job
-        #   4) Attempt to fail job fails
-        self.assertEqual(len(self.q), 0, 'Start with an empty queue')
-        self.assertEqual(len(self.client.failed()), 0)
-        jid = self.q.put(qless.Job, {'test': 'fail_complete'})
-        job = self.q.pop()
-        job.complete()
-        self.assertEqual(job.fail('foo', 'Some sort of message'), False)
-        self.assertEqual(len(self.client.failed()), 0)
+
     
     def test_cancel(self):
         # In this test, we want to make sure that we can corretly
@@ -475,7 +683,7 @@ class TestQless(unittest.TestCase):
         #   4) Cancel that job
         #   5) Make sure that we don't see failure stats
         jid = self.q.put(qless.Job, {'test': 'cancel_fail'})
-        job = self.client.job(jid)
+        job = self.q.pop()
         job.fail('foo', 'some message')
         self.assertEqual(self.client.failed(), {'foo': 1})
         job.cancel()
@@ -705,7 +913,8 @@ class TestQless(unittest.TestCase):
             'stalled': 0,
             'waiting': 0,
             'running': 0,
-            'scheduled': 1
+            'scheduled': 1,
+            'depends': 0
         }
         self.assertEqual(self.client.queues(), [expected])
         self.assertEqual(self.client.queues("testing"), expected)
@@ -858,7 +1067,7 @@ class TestQless(unittest.TestCase):
         stats = self.q.stats()
         self.assertEqual(stats['failed'  ], 0)
         self.assertEqual(stats['failures'], 0)
-        job = self.client.job(jid)
+        job = self.q.pop()
         job.fail('foo', 'bar')
         stats = self.q.stats()
         self.assertEqual(stats['failed'  ], 1)
@@ -895,7 +1104,7 @@ class TestQless(unittest.TestCase):
         #   5) Check the stats with today, check failed = 0, failures = 0
         #   6) Check 'yesterdays' stats, check failed = 0, failures = 1
         jid = self.q.put(qless.Job, {'test':'stats_failed_original_day'})
-        job = self.client.job(jid)
+        job = self.q.pop()
         job.fail('foo', 'bar')
         stats = self.q.stats()
         self.assertEqual(stats['failures'], 1)
@@ -1112,7 +1321,7 @@ class TestQless(unittest.TestCase):
         self.client.config.set('heartbeat', -60)
         jid = self.q.put(qless.Job, {'test': 'rss'})
         job = self.q.pop()
-        self.assertEqual(self.q.stalled(), [jid])
+        self.assertEqual(self.q.stalled(), [jid])    
     
     # ==================================================================
     # In these tests, we want to ensure that if we don't provide enough
@@ -1143,7 +1352,12 @@ class TestQless(unittest.TestCase):
         # Malformed JSON
         self.assertRaises(Exception, complete, *([], ['deadbeef', 'worker1', 'foo', 12345, '[}']))
         # Not a number for delay
-        self.assertRaises(Exception, complete, *([], ['deadbeef', 'worker1', 'foo', 12345, '{}', 'foo', 'howdy']))
+        self.assertRaises(Exception, complete, *([], ['deadbeef', 'worker1', 'foo', 12345, '{}', 'next', 'howdy', 'delay', 'howdy']))
+        # Mutually exclusive options
+        self.assertRaises(Exception, complete, *([], ['deadbeef', 'worker1', 'foo', 12345, '{}', 'next', 'foo', 'delay', 5, 'depends', '["foo"]']))
+        # Mutually inclusive options (with 'next')
+        self.assertRaises(Exception, complete, *([], ['deadbeef', 'worker1', 'foo', 12345, '{}', 'delay', 5]))
+        self.assertRaises(Exception, complete, *([], ['deadbeef', 'worker1', 'foo', 12345, '{}', 'depends', '["foo"]']))
     
     def test_lua_fail(self):
         fail = qless.lua('fail', self.redis)
@@ -1267,12 +1481,16 @@ class TestQless(unittest.TestCase):
         self.assertRaises(Exception, put, *(['foo'], ['deadbeef', 'foo', '{}']))
         # Malformed now
         self.assertRaises(Exception, put, *(['foo'], ['deadbeef', 'foo', '{}', 'howdy']))
-        # Malformed priority
+        # Malformed delay
         self.assertRaises(Exception, put, *(['foo'], ['deadbeef', 'foo', '{}', 12345, 'howdy']))
+        # Malformed priority
+        self.assertRaises(Exception, put, *(['foo'], ['deadbeef', 'foo', '{}', 12345, 0, 'priority', 'howdy']))
         # Malformed tags
-        self.assertRaises(Exception, put, *(['foo'], ['deadbeef', 'foo', '{}', 12345, 0, '[}']))
-        # Malformed dleay
-        self.assertRaises(Exception, put, *(['foo'], ['deadbeef', 'foo', '{}', 12345, 0, '[]', 'howdy']))
+        self.assertRaises(Exception, put, *(['foo'], ['deadbeef', 'foo', '{}', 12345, 0, 'tags', '[}']))
+        # Malformed retries
+        self.assertRaises(Exception, put, *(['foo'], ['deadbeef', 'foo', '{}', 12345, 0, 'retries', 'hello']))
+        # Mutually exclusive options
+        self.assertRaises(Exception, put, *(['foo'], ['deadbeef', 'foo', '{}', 12345, 5, 'depends', '["hello"]']))
     
     def test_lua_queues(self):
         queues = qless.lua('queues', self.redis)

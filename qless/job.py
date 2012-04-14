@@ -34,12 +34,14 @@ class Job(object):
     
     def __init__(self, client, **kwargs):
         self.client = client
-        for att in ['data', 'jid', 'klass', 'priority', 'tags', 'worker', 'expires',
-            'state', 'tracked', 'queue', 'retries', 'remaining', 'failure', 'history']:
+        for att in ['data', 'jid', 'klass', 'priority', 'tags', 'worker', 'expires', 'state', 'tracked',
+        'queue', 'retries', 'remaining', 'failure', 'history', 'dependents', 'dependencies']:
             setattr(self, att, kwargs[att])
         
         # Because of how Lua parses JSON, empty tags comes through as {}
-        self.tags = self.tags or []
+        self.tags         = self.tags         or []
+        self.dependents   = self.dependents   or []
+        self.dependencies = self.dependencies or []
     
     def __getitem__(self, key):
         return self.data.get(key)
@@ -115,17 +117,19 @@ class Job(object):
             self.jid,
             self.klass,
             json.dumps(self.data),
-            repr(time.time())
+            repr(time.time()),
+            0
         ])
     
-    def complete(self, next=None, delay=None):
+    def complete(self, next=None, delay=None, depends=None):
         '''Complete(0, id, worker, queue, now, [data, [next, [delay]]])
         -----------------------------------------------
         Complete a job and optionally put it in another queue, either scheduled or to
         be considered waiting immediately.'''
         if next:
             return self.client._complete([], [self.jid, self.client.worker, self.queue,
-                repr(time.time()), json.dumps(self.data), next, delay or 0]) or False
+                repr(time.time()), json.dumps(self.data), 'next', next, 'delay', delay or 0,
+                'depends', json.dumps(depends or [])]) or False
         else:
             return self.client._complete([], [self.jid, self.client.worker, self.queue,
                 repr(time.time()), json.dumps(self.data)]) or False
@@ -171,3 +175,21 @@ class Job(object):
     
     def untrack(self):
         return self.client._track([], ['untrack', self.jid, repr(time.time())])
+
+    def depend(self, *args):
+        # Depends(0, jid, ('on', [jid, [jid, [...]]]) | ('off', ('all' | [jid, [jid, [...]]]))
+        # ------------------------------------------------------------------------------------
+        # Add or remove dependencies a job has. If 'on' is provided, the provided jids are 
+        # added as dependencies. If 'off' and 'all' are provided, then all the current dependencies
+        # are removed. If 'off' is provided and the next argument is not 'all', then those
+        # jids are removed as dependencies.
+        # 
+        # If a job is not already in the 'depends' state, then this call will return false.
+        # Otherwise, it will return true
+        return self.client._depends([], [self.jid, 'on'] + list(args)) or False
+    
+    def undepend(self, *args, **kwargs):
+        if kwargs.get('all', False):
+            return self.client._depends([], [self.jid, 'off', 'all']) or False
+        else:
+            return self.client._depends([], [self.jid, 'off'] + list(args)) or False
