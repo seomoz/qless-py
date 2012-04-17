@@ -15,8 +15,8 @@ setup(name               = 'qless-py',
 	version              = '0.0.1',
 	description          = 'Redis Queue Management',
 	long_description     = '''
-    Redis-based queue management, with heartbeating, job tracking,
-    stats, and a whole lot more.
+        Redis-based queue management, with heartbeating, job tracking,
+        stats, and a whole lot more.
     ''',
 	url                  = 'http://github.com/seomoz/qless-py',
 	author               = 'Dan Lecocq',
@@ -28,6 +28,9 @@ setup(name               = 'qless-py',
     package_data         = {'qless': ['qless-core/*.lua']},
     scripts              = ['bin/qless-py-worker'],
     include_package_data = True,
+    extras_require       = {
+        'ps': ['setproctitle']
+    },
 	classifiers          = [
         'License :: OSI Approved :: MIT License',
 		'Programming Language :: Python',

@@ -87,8 +87,9 @@ class Job(object):
             if isinstance(method, types.FunctionType):
                 try:
                     method(self)
-                except:
-                    self.fail(self.queue + '-failure', traceback.format_exc())
+                except Exception as e:
+                    # Make error type based on exception type
+                    self.fail(self.queue + '-' + e.__class__.__name__, traceback.format_exc())
             else:
                 # Or fail with a message to that effect
                 self.fail(self.queue + '-method-type', repr(method) + ' is not static')
@@ -98,9 +99,9 @@ class Job(object):
     
     def ttl(self):
         '''How long until this expires, in seconds'''
-        return repr(time.time()) - self.expires
+        return time.time() - self.expires
     
-    def move(self, queue):
+    def move(self, queue, delay=0, depends=None):
         '''Put(1, queue, id, data, now, [priority, [tags, [delay]]])
         ---------------------------------------------------------------    
         Either create a new job in the provided queue with the provided attributes,
@@ -118,7 +119,8 @@ class Job(object):
             self.klass,
             json.dumps(self.data),
             repr(time.time()),
-            0
+            delay,
+            'depends', json.dumps(depends or [])
         ])
     
     def complete(self, next=None, delay=None, depends=None):

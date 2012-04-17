@@ -94,8 +94,6 @@ class TestDependencies(TestQless):
         # Complete them, and then make sure the last one's available
         for job in jobs:
             j = self.q.pop()
-            if j:
-                print '%s => %s' % (j.jid, jid)
             self.assertEqual(j, None)
             job.complete()
         
@@ -329,6 +327,18 @@ class TestFail(TestQless):
         job.move('testing')
         self.assertEqual(len(self.q), 1)
         self.assertEqual(self.client.failed(), {})
+    
+    def test_complete_failed(self):
+        # No matter if a job has been failed before or not, then we
+        # should delete the failure information we have once a job
+        # has completed.
+        jid = self.q.put(qless.Job, {'test': 'put_failed'})
+        job = self.q.pop()
+        job.fail('foo', 'some message')
+        job.move('testing')
+        job = self.q.pop()
+        self.assertEqual(job.complete(), 'complete')
+        self.assertEqual(self.client.job(jid).failure, {})
 
 class TestEverything(TestQless):    
     def test_config(self):

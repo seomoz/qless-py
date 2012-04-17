@@ -10,22 +10,57 @@ import logging
 from qless import logger
 from multiprocessing import Process
 
-class Worker(Process):
-    # This is a class that processes jobs from various queues
-    def __init__(self, queues, interval, sandbox):
-        Process.__init__(self, target=self.loop)
-        self.queues   = queues
-        self.interval = interval
-        # Our sandbox. Make sure that the directory exists
-        self.sandbox  = sandbox
-        if not os.path.isdir(self.sandbox):
-            os.makedirs(self.sandbox)
-        # Make sure our sandbox is nice and tidy and ready for business!
-        self.clean()
+try:
+    from setproctitle import setproctitle
+except ImportError:
+    def setproctitle(title):
+        pass
+
+class Worker(object):
+    def __init__(self, queues, host='localhost', port=6579, workers=None, interval=60, workdir='.'):
+        self.client    = qless.client(host, port)
+        self.count     = workers or psutil.NUM_CPUS
+        self.interval  = interval
+        self.queues    = [self.client.queue(q) for q in queues]
+        self.sandboxes = {}
+        # This is for filesystem sandboxing. Each worker has
+        # a directory associated with it, which it should make
+        # sure is the working directory in which it runs each
+        # of the jobs. It should also ensure that the directory
+        # exists, and clobbers files before each run, and after.
+        self.workdir   = os.path.abspath(workdir)
+        self.sandbox   = self.workdir
+        self.master    = True
     
-    def healthy(self):
-        # Here we might look for RAM consumption, etc.
-        return self.is_alive()
+    def run(self):
+        for i in range(self.count):
+            sandbox = os.path.join(self.workdir, 'qless-py-workers', 'sandbox-%i' % i)
+            cpid = os.fork()
+            if cpid:
+                logger.info('Spawned worker %i' % cpid)
+                self.sandboxes[cpid] = sandbox
+            else:
+                self.master  = False
+                self.sandbox = sandbox
+                self.work()
+                return
+        
+        while self.master:
+            try:
+                pid, status = os.wait()
+                logger.warn('Worker %i died with status %i from signal %i' % (pid, status >> 8, status & 0xff))
+                sandbox = self.sandboxes.pop(pid)
+                cpid = os.fork()
+                if cpid:
+                    logger.info('Spawned replacement worker %i' % cpid)
+                    self.sandboxes[cpid] = sandbox
+                else:
+                    self.master  = False
+                    self.sandbox = sandbox
+                    self.work()
+                    return
+            except KeyboardInterrupt:
+                self.stop(); break
     
     def clean(self):
         # This cleans the sandbox -- changing the working directory to it,
@@ -42,81 +77,51 @@ class Worker(Process):
                 logger.info('Removing file %s...' % p)
                 os.remove(p)
     
-    def loop(self):
+    def setproctitle(self, message):
+        base = 'qless-py-worker [%s] ' % ','.join(q.name for q in self.queues)
+        setproctitle(base + message)
+    
+    def work(self):
+        if not os.path.isdir(self.sandbox):
+            os.makedirs(self.sandbox)
+        self.clean()
         while True:
             try:
+                seen = False
                 for queue in self.queues:
-                    seen = False
                     job = queue.pop()
                     if job:
                         seen = True
                         logger.info('Processing %s in %s' % (job.jid, queue.name))
+                        self.setproctitle('Working %s (%s)' % (job.jid, job.klass))
                         job.process()
                         self.clean()
-                    if not seen:
-                        time.sleep(self.interval)
+                
+                if not seen:
+                    self.setproctitle('sleeping...')
+                    time.sleep(self.interval)
             except KeyboardInterrupt:
                 break
-
-class Master(object):
-    # This class is responsible for managing several children workers
-    def __init__(self, queues, host='localhost', port=6579, workers=None, interval=60, workdir='.'):
-        self.client    = qless.client(host, port)
-        self.count     = workers or psutil.NUM_CPUS
-        self.interval  = interval
-        self.queues    = [self.client.queue(q) for q in queues]
-        self.workers   = []
-        # This is for filesystem sandboxing. Each worker has
-        # a directory associated with it, which it should make
-        # sure is the working directory in which it runs each
-        # of the jobs. It should also ensure that the directory
-        # exists, and clobbers files before each run, and after.
-        self.workdir   = os.path.abspath(workdir)
-        self.sandboxes = [os.path.join(self.workdir, 'qless-py-workers', 'sandbox-%i' % i) for i in range(self.count)]
     
-    def stop(self, workers=None):
+    def stop(self):
         # Stop all the workers, and then wait for them
-        if workers == None:
-            workers = self.workers
-        for worker in workers:
-            logger.warn('Stopping %i' % worker.pid)
-            worker.terminate()
+        for cpid in self.sandboxes.keys():
+            logger.warn('Stopping %i...' % cpid)
+            os.kill(cpid, signal.SIGINT)
         
-        for worker in workers:
-            worker.join()
-            logger.warn('Worker %i stopped' % worker.pid)
-            # And return its sandbox to the pool of sandboxes
-            self.sandboxes.append(worker.sandbox)
-    
-    def spawn(self, count):
-        workers = [Worker(self.queues, self.interval, self.sandboxes.pop(0)) for i in range(count)]
-        self.workers.extend(workers)
-        for worker in workers:
-            worker.start()
-            logger.info('Starting worker %i' % worker.pid)
-    
-    def run(self):
-        self.spawn(self.count)
         while True:
             try:
-                # Sleep for a little while, and then check up on the health of all
-                # the worker processes.
-                time.sleep(60)
-                healthy   = []
-                unhealthy = []
-                for worker in self.workers:
-                    if not worker.healthy():
-                        unhealthy.append(worker)
-                    else:
-                        healthy.append(worker)
-                
-                logger.info('%i / %i workers unhealthy:' % (len(unhealthy), len(self.workers)))
-                for worker in unhealthy:
-                    logger.warn('\tWorker %i is unhealthy' % worker.pid)
-                # Now kill all the unhealthy ones and then replace them
-                self.stop(unhealthy)
-                self.workers = healthy
-                self.spawn(self.count - len(self.workers))
-            except KeyboardInterrupt:
+                pid, status = os.wait()
+                self.sandboxes.pop(pid, None)
+                logger.warn('Worker %i stopped.' % cpid)
+            except OSError:
                 break
-        self.stop()
+        
+        for cpid in self.sandboxes.keys():
+            logger.warn('Could not wait for %i' % cpid)
+
+    # QUIT - Wait for child to finish processing then exit
+    # TERM / INT - Immediately kill child then exit
+    # USR1 - Immediately kill child but don't exit
+    # USR2 - Don't start to process any new jobs
+    # CONT - Start to process new jobs again after a USR2

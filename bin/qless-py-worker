@@ -40,4 +40,4 @@ for i in args.imports:
     except Exception:
         logger.exception('Failed to import %s' % i)
 
-worker.Master(args.queues, args.host, args.port, args.workers, args.interval, args.workdir).run()
+worker.Worker(args.queues, args.host, args.port, args.workers, args.interval, args.workdir).run()
