@@ -44,6 +44,9 @@ class client(object):
         results['jobs'] = [Job(self, **j) for j in results['jobs']]
         return results
     
+    def complete(self, offset=0, count=25):
+        return self._jobs([], ['complete', offset, count])
+    
     def failed(self, group=None, start=0, limit=25):
         '''Failed(0, [group, [start, [limit]]])
         ---------------------------------------

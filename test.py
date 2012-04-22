@@ -1338,11 +1338,17 @@ class TestEverything(TestQless):
         jobs = self.q.pop(20)
         self.assertEqual(set(self.q.running(0, 10) + self.q.running(10, 10)), set(jids))
         
+        # Complete all these jobs
+        r = [job.complete() for job in jobs]
+        jids = [job.jid for job in jobs]
+        jids.reverse()
+        self.assertEqual(self.client.complete(0, 10) + self.client.complete(10, 10), jids)
+        
         jids = [self.q.put(qless.Job, {'test': 'rssd'}, delay=60) for i in range(20)]
         self.assertEqual(set(self.q.scheduled(0, 10) + self.q.scheduled(10, 10)), set(jids))
         
-        deps = [self.q.put(qless.Job, {'test': 'rssd'}, depends=jids) for i in range(20)]
-        self.assertEqual(set(self.q.depends(0, 10) + self.q.depends(10, 10)), set(deps))
+        jids = [self.q.put(qless.Job, {'test': 'rssd'}, depends=jids) for i in range(20)]
+        self.assertEqual(set(self.q.depends(0, 10) + self.q.depends(10, 10)), set(jids))
     
     # ==================================================================
     # In these tests, we want to ensure that if we don't provide enough
