@@ -13,6 +13,12 @@ class Queue(object):
         self.worker  = worker
         self._hb     = 60
     
+    def __setattr__(self, key, value):
+        if key == 'heartbeat':
+            self.client.config.set(self.name + '-heartbeat', value)
+        else:
+            object.__setattr__(self, key, value)
+    
     def put(self, klass, data, priority=None, tags=None, delay=None, retries=None, jid=None, depends=None):
         # '''Put(1, queue, id, data, now, [priority, [tags, [delay, [retries]]]])
         # -----------------------------------------------------------------------
