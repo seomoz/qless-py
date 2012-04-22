@@ -12,7 +12,7 @@ handler = logging.StreamHandler()
 handler.setLevel(logging.DEBUG)
 handler.setFormatter(formatter)
 logger.addHandler(handler)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.FATAL)
 
 class client(object):
     def __init__(self, host='localhost', port=6379, hostname = None, **kwargs):

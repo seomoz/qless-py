@@ -8,7 +8,6 @@ import psutil
 import signal
 import logging
 from qless import logger
-from multiprocessing import Process
 
 try:
     from setproctitle import setproctitle
@@ -42,8 +41,7 @@ class Worker(object):
             else:
                 self.master  = False
                 self.sandbox = sandbox
-                self.work()
-                return
+                return self.work()
         
         while self.master:
             try:
@@ -57,10 +55,12 @@ class Worker(object):
                 else:
                     self.master  = False
                     self.sandbox = sandbox
-                    self.work()
-                    return
+                    return self.work()
             except KeyboardInterrupt:
-                self.stop(); break
+                break
+        
+        if self.master:
+            self.stop()
     
     def clean(self):
         # This cleans the sandbox -- changing the working directory to it,
@@ -95,13 +95,15 @@ class Worker(object):
                         logger.info('Processing %s in %s' % (job.jid, queue.name))
                         self.setproctitle('Working %s (%s)' % (job.jid, job.klass))
                         job.process()
+                        logger.info('Completed %s in %s' % (job.jid, queue.name))
                         self.clean()
                 
                 if not seen:
                     self.setproctitle('sleeping...')
+                    logger.debug('Sleeping for %fs' % self.interval)
                     time.sleep(self.interval)
             except KeyboardInterrupt:
-                break
+                return
     
     def stop(self):
         # Stop all the workers, and then wait for them

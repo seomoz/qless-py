@@ -22,6 +22,8 @@ parser.add_argument('--interval', dest='interval', default=60, type=int,
     help='The polling interval')
 parser.add_argument('--workdir', dest='workdir', default='.',
     help='The base work directory path')
+parser.add_argument('--verbose', dest='verbose', default=False, action='store_true',
+    help='Be extra talkative')
 
 args = parser.parse_args()
 
@@ -33,6 +35,10 @@ from qless import worker, logger
 # Now let's add each of the paths to the python search path
 sys.path.extend([os.path.abspath(p) for p in args.paths])
 
+if args.verbose:
+    import logging
+    logger.setLevel(logging.DEBUG)
+
 # Now let's import all the modules and packages we've been asked to import
 for i in args.imports:
     try:
@@ -40,4 +46,8 @@ for i in args.imports:
     except Exception:
         logger.exception('Failed to import %s' % i)
 
-worker.Worker(args.queues, args.host, args.port, args.workers, args.interval, args.workdir).run()
+try:
+    worker.Worker(args.queues, args.host, args.port, args.workers, args.interval, args.workdir).run()
+except Exception:
+    logger.exception('Uncaught exception in qless.worker.Worker.run')
+

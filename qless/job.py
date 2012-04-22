@@ -6,6 +6,7 @@ import uuid
 import time
 import types
 import traceback
+from qless import logger
 import simplejson as json
 
 # The Job class
@@ -89,12 +90,15 @@ class Job(object):
                     method(self)
                 except Exception as e:
                     # Make error type based on exception type
+                    logger.exception('Failed %s in %s' % (self.jid, self.queue, repr(method)))
                     self.fail(self.queue + '-' + e.__class__.__name__, traceback.format_exc())
             else:
                 # Or fail with a message to that effect
+                logger.error('Failed %s in %s : %s is not static' % (self.jid, self.queue, repr(method)))
                 self.fail(self.queue + '-method-type', repr(method) + ' is not static')
         else:
             # Or fail with a message to that effect
+            logger.error('Failed %s : %s is missing a method "%s" or "process"' % (self.jid, self.klass, self.queue))
             self.fail(self.queue + '-method-missing', self.klass + ' is missing a method "' + self.queue + '" or "process"')
     
     def ttl(self):
@@ -114,6 +118,7 @@ class Job(object):
         a JSON array of the tags associated with the instance and the `valid after`
         argument should be in how many seconds the instance should be considered 
         actionable.'''
+        logger.info('Moving %s to %s from %s' % (self.jid, queue, self.queue))
         return self.client._put([queue], [
             self.jid,
             self.klass,
@@ -129,10 +134,12 @@ class Job(object):
         Complete a job and optionally put it in another queue, either scheduled or to
         be considered waiting immediately.'''
         if next:
+            logger.info('Advancing %s to %s from %s' % (self.jid, queue, self.queue))
             return self.client._complete([], [self.jid, self.client.worker, self.queue,
                 repr(time.time()), json.dumps(self.data), 'next', next, 'delay', delay or 0,
                 'depends', json.dumps(depends or [])]) or False
         else:
+            logger.info('Completing %s' % self.jid)
             return self.client._complete([], [self.jid, self.client.worker, self.queue,
                 repr(time.time()), json.dumps(self.data)]) or False
     
@@ -160,6 +167,7 @@ class Job(object):
         requests to heartbeat or complete that job will fail. Failed jobs are kept until
         they are canceled or completed. __Returns__ the id of the failed job if successful,
         or `False` on failure.'''
+        logger.warn('Failing %s (%s): %s' % (self.jid, group, message))
         return self.client._fail([], [self.jid, self.client.worker, group, message, repr(time.time()), json.dumps(self.data)]) or False
     
     def cancel(self):
