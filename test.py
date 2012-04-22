@@ -212,6 +212,8 @@ class TestDependencies(TestQless):
         self.assertEqual(len(self.q.pop(20)), 1)
         b.undepend(a)
         self.assertEqual(self.q.pop().jid, b.jid)
+        # Make sure we removed the dependents from the first one, as well
+        self.assertEqual(self.client.job(a).dependents, [])
         
         # Let's try removing /all/ dependencies
         jids = [self.q.put(qless.Job, {'test': 'remove_dependency'}) for i in range(10)]
@@ -219,6 +221,10 @@ class TestDependencies(TestQless):
         self.assertEqual(len(self.q.pop(20)), 10)
         b.undepend(all=True)
         self.assertEqual(self.client.job(b.jid).state, 'waiting')
+        # Let's make sure that each of the jobs we removed as dependencies also go their
+        # dependencies removed, too.
+        for jid in jids:
+            self.assertEqual(self.client.job(jid).dependents, [])
         
         # If the job's put, but waiting, we can't add dependencies
         a = self.q.put(qless.Job, {'test': 'add_dependency'})

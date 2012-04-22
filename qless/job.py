@@ -134,7 +134,7 @@ class Job(object):
         Complete a job and optionally put it in another queue, either scheduled or to
         be considered waiting immediately.'''
         if next:
-            logger.info('Advancing %s to %s from %s' % (self.jid, queue, self.queue))
+            logger.info('Advancing %s to %s from %s' % (self.jid, next, self.queue))
             return self.client._complete([], [self.jid, self.client.worker, self.queue,
                 repr(time.time()), json.dumps(self.data), 'next', next, 'delay', delay or 0,
                 'depends', json.dumps(depends or [])]) or False
