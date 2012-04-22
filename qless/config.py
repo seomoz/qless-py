@@ -21,7 +21,7 @@ class Config(object):
         -----------------------------
         Set the configuration value for the provided option. If `value` is omitted,
         then it will remove that configuration option.'''
-        if value:
+        if value != None:
             return self.client._setconfig([], [option, value])
         else:
             return self.client._setconfig([], [option])

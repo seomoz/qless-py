@@ -178,13 +178,21 @@ class Job(object):
         will fail. If you try to get the data on the object, you will get nothing.'''
         return self.client._cancel([], [self.jid])
     
-    def track(self, *tags):
-        args = ['track', self.jid, repr(time.time())]
-        args.extend(tags)
-        return self.client._track([], args)
+    def track(self):
+        return self.client._track([], ['track', self.jid, repr(time.time())])
     
     def untrack(self):
         return self.client._track([], ['untrack', self.jid, repr(time.time())])
+    
+    def tag(self, *tags):
+        args = ['add', self.jid, repr(time.time())]
+        args.extend(tags)
+        return self.client._tag([], args)
+    
+    def untag(self, *tags):
+        args = ['remove', self.jid, repr(time.time())]
+        args.extend(tags)
+        return self.client._tag([], args)
     
     def retry(self, delay=0):
         result = self.client._retry([], [self.jid, self.queue, self.worker, repr(time.time()), delay])

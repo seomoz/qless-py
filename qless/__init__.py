@@ -27,8 +27,8 @@ class client(object):
         self.config = Config(self)
         # Client's lua scripts
         for cmd in [
-            'cancel', 'complete', 'depends', 'fail', 'failed', 'get', 'getconfig', 'heartbeat',
-            'jobs', 'peek', 'pop', 'put', 'queues', 'retry', 'setconfig', 'stats', 'track', 'workers']:
+            'cancel', 'complete', 'depends', 'fail', 'failed', 'get', 'getconfig', 'heartbeat', 'jobs',
+            'peek', 'pop','put', 'queues', 'retry', 'setconfig', 'stats', 'tag', 'track', 'workers']:
             setattr(self, '_%s' % cmd, lua(cmd, self.redis))
     
     def queue(self, name):
@@ -43,6 +43,9 @@ class client(object):
         results = json.loads(self._track([], []))
         results['jobs'] = [Job(self, **j) for j in results['jobs']]
         return results
+    
+    def tagged(self, tag, offset=0, count=25):
+        return json.loads(self._tag([], ['get', tag, offset, count]))
     
     def complete(self, offset=0, count=25):
         return self._jobs([], ['complete', offset, count])

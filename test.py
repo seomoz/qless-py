@@ -290,6 +290,69 @@ class TestRetry(TestQless):
         job.complete()
         self.assertEqual(job.retry(), False)
 
+class TestTag(TestQless):
+    # 1) Should make sure that when we double-tag an item, that we don't
+    #   see it show up twice when we get it back with the job
+    # 2) Should also preserve tags in the order in which they were inserted
+    # 3) When a job expires or is canceled, it should be removed from the 
+    #   set of jobs with that tag
+    def test_tag(self):
+        job = self.client.job(self.q.put(qless.Job, {'test': 'tag'}))
+        self.assertEqual(self.client.tagged('foo'), {'total': 0, 'jobs': {}})
+        self.assertEqual(self.client.tagged('bar'), {'total': 0, 'jobs': {}})
+        job.tag('foo')
+        self.assertEqual(self.client.tagged('foo'), {'total': 1, 'jobs': [job.jid]})
+        self.assertEqual(self.client.tagged('bar'), {'total': 0, 'jobs': {}})
+        job.tag('bar')
+        self.assertEqual(self.client.tagged('foo'), {'total': 1, 'jobs': [job.jid]})
+        self.assertEqual(self.client.tagged('bar'), {'total': 1, 'jobs': [job.jid]})
+        job.untag('foo')
+        self.assertEqual(self.client.tagged('foo'), {'total': 0, 'jobs': {}})
+        self.assertEqual(self.client.tagged('bar'), {'total': 1, 'jobs': [job.jid]})
+        job.untag('bar')
+        self.assertEqual(self.client.tagged('foo'), {'total': 0, 'jobs': {}})
+        self.assertEqual(self.client.tagged('bar'), {'total': 0, 'jobs': {}})
+    
+    def test_preserve_order(self):
+        job = self.client.job(self.q.put(qless.Job, {'test': 'preserve_order'}))
+        tags = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+        for i in range(len(tags)):
+            job.tag(tags[i])
+            self.assertEqual(self.client.job(job.jid).tags, tags[0:i+1])
+        
+        # Now let's take a select few out
+        job.untag('a', 'c', 'e', 'g')
+        self.assertEqual(self.client.job(job.jid).tags, ['b', 'd', 'f', 'h'])
+    
+    def test_cancel_expire(self):
+        # First, we'll cancel a job
+        job = self.client.job(self.q.put(qless.Job, {'test': 'cancel_expire'}))
+        job.tag('foo', 'bar')
+        self.assertEqual(self.client.tagged('foo'), {'total': 1, 'jobs': [job.jid]})
+        self.assertEqual(self.client.tagged('bar'), {'total': 1, 'jobs': [job.jid]})
+        job.cancel()
+        self.assertEqual(self.client.tagged('foo'), {'total': 0, 'jobs': {}})
+        self.assertEqual(self.client.tagged('bar'), {'total': 0, 'jobs': {}})
+        
+        # Now, we'll have a job expire from completion
+        self.client.config.set('jobs-history-count', 0)
+        self.q.put(qless.Job, {'test': 'cancel_expire'})
+        job = self.q.pop()
+        self.assertNotEqual(job, None)
+        job.tag('foo', 'bar')
+        job.complete()
+        self.assertEqual(self.client.job(job.jid), None)
+        self.assertEqual(self.client.tagged('foo'), {'total': 0, 'jobs': {}})
+        self.assertEqual(self.client.tagged('bar'), {'total': 0, 'jobs': {}})
+    
+    def test_tag_put(self):
+        # We should make sure that we can tag a job when we initially put it, too
+        self.assertEqual(self.client.tagged('foo'), {'total': 0, 'jobs': {}})
+        self.assertEqual(self.client.tagged('bar'), {'total': 0, 'jobs': {}})
+        jid = self.q.put(qless.Job, {'test': 'tag_put'}, tags=['foo', 'bar'])
+        self.assertEqual(self.client.tagged('foo'), {'total': 1, 'jobs': [jid]})
+        self.assertEqual(self.client.tagged('bar'), {'total': 1, 'jobs': [jid]})
+
 class TestFail(TestQless):
     def test_fail_failed(self):
         # In this test, we want to make sure that we can correctly 
@@ -1053,18 +1116,6 @@ class TestEverything(TestQless):
         self.assertEqual(job.tracked, False)
         job.fail('foo', 'bar')
         self.assertEqual(self.client.failed('foo')['jobs'][0].tracked, False)
-    
-    def test_track_tag(self):
-        # In this test, we want to make sure that when we begin tracking
-        # a job, we can optionally provide tags with it, and those tags
-        # get saved.
-        #   1) Put job, ensure no tags
-        #   2) Track job, ensure tags
-        job = self.client.job(self.q.put(qless.Job, {'test':'track_tag'}))
-        self.assertEqual(job.tags, [])
-        job.track('foo', 'bar')
-        job = self.client.job(job.jid)
-        self.assertEqual(job.tags, ['foo', 'bar'])
     
     def test_retries(self):
         # In this test, we want to make sure that jobs are given a
