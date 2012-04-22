@@ -722,6 +722,12 @@ class TestEverything(TestQless):
         self.assertEqual(job.worker, '')
         self.assertEqual(job.queue , '')
         self.assertEqual(len(self.q), 0)
+        self.assertEqual(self.client.complete(), [jid])
+        
+        # Now, if we move job back into a queue, we shouldn't see any
+        # completed jobs anymore
+        job.move('testing')
+        self.assertEqual(self.client.complete(), [])
     
     def test_complete_advance(self):
         # In this test, we want to make sure that a job that has been
