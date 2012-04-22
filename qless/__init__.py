@@ -28,7 +28,7 @@ class client(object):
         # Client's lua scripts
         for cmd in [
             'cancel', 'complete', 'depends', 'fail', 'failed', 'get', 'getconfig', 'heartbeat',
-            'jobs', 'peek', 'pop', 'put', 'queues', 'setconfig', 'stats', 'track', 'workers']:
+            'jobs', 'peek', 'pop', 'put', 'queues', 'retry', 'setconfig', 'stats', 'track', 'workers']:
             setattr(self, '_%s' % cmd, lua(cmd, self.redis))
     
     def queue(self, name):

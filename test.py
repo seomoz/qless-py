@@ -244,6 +244,52 @@ class TestDependencies(TestQless):
         self.assertEqual(self.client.queues('testing')['depends'], 1)
         self.assertEqual(self.q.depends(), [b])
 
+class TestRetry(TestQless):
+    # It should decrement retries, and put it back in the queue. If retries
+    # have been exhausted, then it should be marked as failed.
+    # Prohibitions:
+    #   1) We can't retry from another worker
+    #   2) We can't retry if it's not running
+    def test_retry(self):
+        jid = self.q.put(qless.Job, {'test': 'test_retry'})
+        job = self.q.pop()
+        self.assertEqual(job.retries, job.remaining)
+        job.retry()
+        # Pop it off again
+        job = self.q.pop()
+        self.assertNotEqual(job, None)
+        self.assertEqual(job.retries, job.remaining + 1)
+        # Retry it again, with a backoff
+        job.retry(60)
+        self.assertEqual(self.q.pop(), None)
+        self.assertEqual(self.q.scheduled(), [jid])
+        job = self.client.job(jid)
+        self.assertEqual(job.retries, job.remaining + 2)
+    
+    def test_retry_fail(self):
+        # Make sure that if we exhaust a job's retries, that it fails
+        jid = self.q.put(qless.Job, {'test': 'test_retry_fail'}, retries=2)
+        self.assertEqual(self.client.failed(), {})
+        self.assertEqual(self.q.pop().retry(), 1)
+        self.assertEqual(self.q.pop().retry(), 0)
+        self.assertEqual(self.q.pop().retry(), -1)
+        self.assertEqual(self.client.failed(), {
+            'failed-retries-testing': 1
+        })
+    
+    def test_retry_error(self):
+        # These are some of the conditions under which we cannot retry a job
+        job = self.client.job(self.q.put(qless.Job, {'test': 'test_retry_error'}))
+        self.assertEqual(job.retry(), False)
+        self.q.pop().fail('foo', 'bar')
+        self.assertEqual(self.client.job(job.jid).retry(), False)
+        self.client.job(job.jid).move('testing')
+        job = self.q.pop(); job.worker = 'foobar'
+        self.assertEqual(job.retry(), False)
+        job.worker = self.client.worker
+        job.complete()
+        self.assertEqual(job.retry(), False)
+
 class TestFail(TestQless):
     def test_fail_failed(self):
         # In this test, we want to make sure that we can correctly 

@@ -185,7 +185,13 @@ class Job(object):
     
     def untrack(self):
         return self.client._track([], ['untrack', self.jid, repr(time.time())])
-
+    
+    def retry(self, delay=0):
+        result = self.client._retry([], [self.jid, self.queue, self.worker, repr(time.time()), delay])
+        if result == None:
+            return False
+        return result
+    
     def depend(self, *args):
         # Depends(0, jid, ('on', [jid, [jid, [...]]]) | ('off', ('all' | [jid, [jid, [...]]]))
         # ------------------------------------------------------------------------------------
