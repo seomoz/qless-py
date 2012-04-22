@@ -99,7 +99,7 @@ class Job(object):
     
     def ttl(self):
         '''How long until this expires, in seconds'''
-        return time.time() - self.expires
+        return self.expires - time.time()
     
     def move(self, queue, delay=0, depends=None):
         '''Put(1, queue, id, data, now, [priority, [tags, [delay]]])
