@@ -289,6 +289,15 @@ class TestRetry(TestQless):
         job.worker = self.client.worker
         job.complete()
         self.assertEqual(job.retry(), False)
+    
+    def test_retry_workers(self):
+        # When we retry a job, it shouldn't be reported as belonging to that worker
+        # any longer
+        jid = self.q.put(qless.Job, {'test': 'test_retry_workers'})
+        job = self.q.pop()
+        self.assertEqual(self.client.workers(self.client.worker), {'jobs': [jid], 'stalled': {}})
+        self.assertEqual(job.retry(), 4)
+        self.assertEqual(self.client.workers(self.client.worker), {'jobs': {}, 'stalled': {}})
 
 class TestTag(TestQless):
     # 1) Should make sure that when we double-tag an item, that we don't
