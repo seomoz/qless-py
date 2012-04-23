@@ -378,8 +378,15 @@ class TestTag(TestQless):
         job = self.q.pop()
         self.assertNotEqual(job, None)
         job.tag('foo', 'bar')
+        self.assertEqual(self.client.tagged('foo'), {'total': 1, 'jobs': [job.jid]})
+        self.assertEqual(self.client.tagged('bar'), {'total': 1, 'jobs': [job.jid]})
         job.complete()
         self.assertEqual(self.client.job(job.jid), None)
+        self.assertEqual(self.client.tagged('foo'), {'total': 0, 'jobs': {}})
+        self.assertEqual(self.client.tagged('bar'), {'total': 0, 'jobs': {}})
+        
+        # If the job no longer exists, attempts to tag it should not add to the set
+        job.tag('foo', 'bar')
         self.assertEqual(self.client.tagged('foo'), {'total': 0, 'jobs': {}})
         self.assertEqual(self.client.tagged('bar'), {'total': 0, 'jobs': {}})
     
@@ -1633,6 +1640,17 @@ class TestEverything(TestQless):
         # Malformed now
         self.assertRaises(Exception, pop, *(['foo'], ['worker1', 1, 'howdy']))
     
+    def test_lua_priority(self):
+        priority = qless.lua('priority', self.redis)
+        # Passing in keys
+        self.assertRaises(Exception, priority, *(['foo'], ['12345', 1]))
+        # Missing jid
+        self.assertRaises(Exception, priority, *([], []))
+        # Missing priority
+        self.assertRaises(Exception, priority, *([], ['12345']))
+        # Malformed priority
+        self.assertRaises(Exception, priority, *([], ['12345', 'howdy']))
+    
     def test_lua_put(self):
         put = qless.lua('put', self.redis)
         # Passing in no keys
@@ -1675,6 +1693,23 @@ class TestEverything(TestQless):
         # Malformed time
         self.assertRaises(Exception, queues, *([], ['howdy']))
     
+    def test_lua_retry(self):
+        retry = qless.lua('retry', self.redis)
+        # Passing in keys
+        self.assertRaises(Exception, retry, *(['foo'], ['12345', 'testing', 'worker', 12345, 0]))
+        # Missing jid
+        self.assertRaises(Exception, retry, *([], []))
+        # Missing queue
+        self.assertRaises(Exception, retry, *([], ['12345']))
+        # Missing worker
+        self.assertRaises(Exception, retry, *([], ['12345', 'testing']))
+        # Missing now
+        self.assertRaises(Exception, retry, *([], ['12345', 'testing', 'worker']))
+        # Malformed now
+        self.assertRaises(Exception, retry, *([], ['12345', 'testing', 'worker', 'howdy']))
+        # Malformed delay
+        self.assertRaises(Exception, retry, *([], ['12345', 'testing', 'worker', 12345, 'howdy']))
+    
     def test_lua_setconfig(self):
         setconfig = qless.lua('setconfig', self.redis)
         # Passing in keys
@@ -1688,6 +1723,30 @@ class TestEverything(TestQless):
         self.assertRaises(Exception, stats, *([], []))
         # Missing date
         self.assertRaises(Exception, stats, *([], ['foo']))
+    
+    def test_lua_tag(self):
+        tag = qless.lua('tag', self.redis)
+        # Passing in keys
+        self.assertRaises(Exception, tag, *(['foo'], ['add', '12345', 12345, 'foo']))
+        # First, test 'add' command
+        # Missing command
+        self.assertRaises(Exception, tag, *([], []))
+        # Missing jid
+        self.assertRaises(Exception, tag, *([], ['add']))
+        # Missing now
+        self.assertRaises(Exception, tag, *([], ['add', '12345']))
+        # Malformed now
+        self.assertRaises(Exception, tag, *([], ['add', '12345', 'howdy']))
+        # Now, test 'remove' command
+        # Missing jid
+        self.assertRaises(Exception, tag, *([], ['remove']))
+        # Now, test 'get'
+        # Missing tag
+        self.assertRaises(Exception, tag, *([], ['get']))
+        # Malformed offset
+        self.assertRaises(Exception, tag, *([], ['get', 'foo', 'howdy']))
+        # Malformed count
+        self.assertRaises(Exception, tag, *([], ['get', 'foo', 0, 'howdy']))
     
     def test_lua_track(self):
         track = qless.lua('track', self.redis)
