@@ -16,8 +16,8 @@ except ImportError:
         pass
 
 class Worker(object):
-    def __init__(self, queues, host='localhost', port=6579, workers=None, interval=60, workdir='.'):
-        self.client    = qless.client(host, port)
+    def __init__(self, queues, host='localhost', port=6579, workers=None, interval=60, workdir='.', **kwargs):
+        self.client    = qless.client(host, port, **kwargs)
         self.count     = workers or psutil.NUM_CPUS
         self.interval  = interval
         self.queues    = [self.client.queue(q) for q in queues]

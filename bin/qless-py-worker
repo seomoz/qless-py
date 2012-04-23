@@ -20,6 +20,8 @@ parser.add_argument('--import', dest='imports', action='append', default=[],
     help='The modules to preemptively import')
 parser.add_argument('--interval', dest='interval', default=60, type=int,
     help='The polling interval')
+parser.add_argument('--hostname', dest='hostname', default=None, type=str,
+    help='The hostname to identify as')
 parser.add_argument('--workdir', dest='workdir', default='.',
     help='The base work directory path')
 parser.add_argument('--verbose', dest='verbose', default=False, action='store_true',
@@ -47,7 +49,7 @@ for i in args.imports:
         logger.exception('Failed to import %s' % i)
 
 try:
-    worker.Worker(args.queues, args.host, args.port, args.workers, args.interval, args.workdir).run()
+    worker.Worker(args.queues, args.host, args.port, args.workers, args.interval, args.workdir, hostname=args.hostname).run()
 except Exception:
     logger.exception('Uncaught exception in qless.worker.Worker.run')
 
