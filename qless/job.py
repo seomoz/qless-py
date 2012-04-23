@@ -97,7 +97,7 @@ class Job(object):
                     method(self)
                 except Exception as e:
                     # Make error type based on exception type
-                    logger.exception('Failed %s in %s' % (self.jid, self.queue, repr(method)))
+                    logger.exception('Failed %s in %s: %s' % (self.jid, self.queue, repr(method)))
                     self.fail(self.queue + '-' + e.__class__.__name__, traceback.format_exc())
             else:
                 # Or fail with a message to that effect
