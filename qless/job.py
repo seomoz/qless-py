@@ -33,11 +33,18 @@ class Job(object):
         
         return getattr(mod, klass.rpartition('.')[2])
     
+    def __setattr__(self, key, value):
+        if key == 'priority':
+            if self.client._priority([], [self.jid, value]) != None:
+                object.__setattr__(self, key, value)
+        else:
+            object.__setattr__(self, key, value)
+    
     def __init__(self, client, **kwargs):
         self.client = client
         for att in ['data', 'jid', 'klass', 'priority', 'tags', 'worker', 'expires', 'state', 'tracked',
         'queue', 'retries', 'remaining', 'failure', 'history', 'dependents', 'dependencies']:
-            setattr(self, att, kwargs[att])
+            object.__setattr__(self, att, kwargs[att])
         
         # Because of how Lua parses JSON, empty tags comes through as {}
         self.tags         = self.tags         or []

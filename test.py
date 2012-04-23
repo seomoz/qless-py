@@ -299,6 +299,35 @@ class TestRetry(TestQless):
         self.assertEqual(job.retry(), 4)
         self.assertEqual(self.client.workers(self.client.worker), {'jobs': {}, 'stalled': {}})
 
+class TestPriority(TestQless):
+    # Basically all we need to test:
+    # 1) If the job doesn't exist, then attempts to set the priority should
+    #   return false. This doesn't really matter for us since we're using the
+    #   __setattr__ magic method
+    # 2) If the job's in a queue, but not yet popped, we should update its
+    #   priority in that queue.
+    # 3) If a job's in a queue, but already popped, then we just update the 
+    #   job's priority.
+    def test_priority(self):
+        a = self.q.put(qless.Job, {'test': 'test_priority'}, priority = -10)
+        b = self.q.put(qless.Job, {'test': 'test_priority'})
+        self.assertEqual(self.q.peek().jid, a)
+        job = self.client.job(b)
+        job.priority = -20
+        self.assertEqual(len(self.q), 2)
+        self.assertEqual(self.q.peek().jid, b)
+        job = self.q.pop()
+        self.assertEqual(len(self.q), 2)
+        self.assertEqual(job.jid, b)
+        job = self.q.pop()
+        self.assertEqual(len(self.q), 2)
+        self.assertEqual(job.jid, a)
+        job.priority = -30
+        # Make sure it didn't get doubly-inserted in the queue
+        self.assertEqual(len(self.q), 2)
+        self.assertEqual(self.q.peek(), None)
+        self.assertEqual(self.q.pop(), None)
+
 class TestTag(TestQless):
     # 1) Should make sure that when we double-tag an item, that we don't
     #   see it show up twice when we get it back with the job
