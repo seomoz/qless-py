@@ -397,6 +397,34 @@ class TestTag(TestQless):
         jid = self.q.put(qless.Job, {'test': 'tag_put'}, tags=['foo', 'bar'])
         self.assertEqual(self.client.tagged('foo'), {'total': 1, 'jobs': [jid]})
         self.assertEqual(self.client.tagged('bar'), {'total': 1, 'jobs': [jid]})
+    
+    def test_tag_top(self):
+        # 1) Make sure that it only includes tags with more than one job associated with it
+        # 2) Make sure that when jobs are untagged, it decrements the count
+        # 3) When we tag a job, it increments the count
+        # 4) When jobs complete and expire, it decrements the count
+        # 5) When jobs are put, make sure it shows up in the tags
+        # 6) When canceled, decrements
+        self.assertEqual(self.client.tags(), {})
+        jids = [self.q.put(qless.Job, {}, tags=['foo']) for i in range(10)]
+        self.assertEqual(self.client.tags(), ['foo'])
+        jobs = [self.client.job(jid).cancel() for jid in jids]
+        self.assertEqual(self.client.tags(), {})
+        # Add only one back
+        a = self.q.put(qless.Job, {}, tags=['foo'])
+        self.assertEqual(self.client.tags(), {})
+        # Add a second, and then tag it
+        b = self.client.job(self.q.put(qless.Job, {}))
+        b.tag('foo')
+        self.assertEqual(self.client.tags(), ['foo'])
+        b.untag('foo')
+        self.assertEqual(self.client.tags(), {})
+        b.tag('foo')
+        # Test job expiration
+        self.client.config.set('jobs-history-count', 0)
+        self.assertEqual(len(self.q), 2)
+        self.q.pop().complete()
+        self.assertEqual(self.client.tags(), {})
 
 class TestFail(TestQless):
     def test_fail_failed(self):

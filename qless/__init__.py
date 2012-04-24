@@ -47,6 +47,9 @@ class client(object):
     def tagged(self, tag, offset=0, count=25):
         return json.loads(self._tag([], ['get', tag, offset, count]))
     
+    def tags(self, offset=0, count=100):
+        return json.loads(self._tag([], ['top', offset, count]))
+    
     def complete(self, offset=0, count=25):
         return self._jobs([], ['complete', offset, count])
     
