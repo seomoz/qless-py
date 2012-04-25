@@ -791,10 +791,11 @@ class TestEverything(TestQless):
         bjob = self.b.pop()
         self.assertEqual(bjob, None)
         self.assertTrue(isinstance(ajob.heartbeat(), float))
-        self.assertTrue(ajob.heartbeat() >= time.time())
+        self.assertTrue(ajob.ttl() > 0)
         # Now try setting a queue-specific heartbeat
         self.q.heartbeat = -60
-        self.assertTrue(ajob.heartbeat() <= time.time())
+        self.assertTrue(isinstance(ajob.heartbeat(), float))
+        self.assertTrue(ajob.ttl() <= 0)
     
     def test_heartbeat_expiration(self):
         # In this test, we want to make sure that when we heartbeat a 

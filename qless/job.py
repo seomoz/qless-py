@@ -154,7 +154,8 @@ class Job(object):
         '''Heartbeat(0, id, worker, expiration, [data])
         -------------------------------------------
         Renew the heartbeat, if possible, and optionally update the job's user data.'''
-        return float(self.client._heartbeat([], [self.jid, self.client.worker, repr(time.time()), json.dumps(self.data)]) or 0)
+        self.expires = float(self.client._heartbeat([], [self.jid, self.client.worker, repr(time.time()), json.dumps(self.data)]) or 0)
+        return self.expires
     
     def fail(self, group, message):
         '''Fail(0, id, worker, group, message, now, [data])
