@@ -5,9 +5,34 @@ import math
 import qless
 import redis
 import unittest
+import time as _time
 
 class FooJob(qless.Job):
     pass
+
+# Let's mock up time
+time._frozen = False
+
+# Save out the original time function
+time._time = time.time
+
+def _freeze():
+    time._frozen = True
+    time._when   = time._time()
+
+def _unfreeze():
+    time._frozen = False
+
+def _advance(increment):
+    time._when += increment
+
+def _time():
+    return (time._frozen and time._when) or time._time()
+
+time.freeze   = _freeze
+time.unfreeze = _unfreeze
+time.advance  = _advance
+time.time     = _time
 
 class TestQless(unittest.TestCase):
     def setUp(self):
@@ -37,6 +62,7 @@ class TestQless(unittest.TestCase):
     
     def tearDown(self):
         self.redis.flushdb()
+        time.unfreeze()
 
 class TestDependencies(TestQless):
     def test_depends_put(self):
@@ -667,19 +693,15 @@ class TestEverything(TestQless):
         # This is /ugly/, but we're going to path the time function so
         # that we can fake out how long these things are waiting
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
-        oldtime = time.time
-        now = time.time()
-        time.time = lambda: now
+        time.freeze()
         jid = self.q.put(qless.Job, {'test': 'scheduled'}, delay=10)
         self.assertEqual(self.q.pop(), None)
         self.assertEqual(len(self.q), 1)
-        time.time = lambda: now + 11
+        time.advance(11)
         job = self.q.pop()
         self.assertNotEqual(job, None)
         self.assertEqual(job.jid, jid)
-        # Make sure that we reset it to the old system time function!
-        time.time = oldtime
-        self.assertTrue(sum(time.time() - time.time() for i in range(200)) < 0)
+        time.unfreeze()
     
     def test_put_pop_complete_history(self):
         # In this test, we want to put a job, pop it, and then 
@@ -773,6 +795,25 @@ class TestEverything(TestQless):
         # Now try setting a queue-specific heartbeat
         self.q.heartbeat = -60
         self.assertTrue(ajob.heartbeat() <= time.time())
+    
+    def test_heartbeat_expiration(self):
+        # In this test, we want to make sure that when we heartbeat a 
+        # job, its expiration in the queue is also updated. So, supposing
+        # that I heartbeat a job 5 times, then its expiration as far as
+        # the lock itself is concerned is also updated
+        self.client.config.set('crawl-heartbeat', 7200)
+        jid = self.q.put(qless.Job, {})
+        job = self.a.pop()
+        self.assertEqual(self.b.pop(), None)
+        time.freeze()
+        # Now, we'll advance the apparent system clock, and heartbeat
+        for i in range(10):
+            time.advance(3600)
+            self.assertNotEqual(job.heartbeat(), False)
+            self.assertEqual(self.b.pop(), None)
+        
+        # Reset it to the original time object
+        time.unfreeze()
     
     def test_heartbeat_state(self):
         # In this test, we want to make sure that we cannot heartbeat
@@ -1033,23 +1074,15 @@ class TestEverything(TestQless):
         stats = self.q.stats(time.time())
         self.assertEqual(stats['wait']['count'], 0)
         self.assertEqual(stats['run' ]['count'], 0)
-        # This is /ugly/, but we're going to path the time function so
-        # that we can fake out how long these things are waiting
-        oldtime = time.time
-        now = time.time()
-        time.time = lambda: now
+        
+        time.freeze()
         jids = [self.q.put(qless.Job, {'test': 'stats_waiting', 'count': c}) for c in range(20)]
         self.assertEqual(len(jids), 20)
         for i in range(len(jids)):
-            time.time = lambda: (i + now)
-            job = self.q.pop()
-            self.assertNotEqual(job, None)
-        # Make sure that we reset it to the old system time function!
-        time.time = oldtime
-        # Let's actually go ahead an add a test to make sure that the
-        # system time has been reset. If the system time has not, it
-        # could quite possibly impact the rest of the tests
-        self.assertTrue(sum(time.time() - time.time() for i in range(200)) < 0)
+            self.assertNotEqual(self.q.pop(), None)
+            time.advance(1)
+        
+        time.unfreeze()
         # Now, make sure that we see stats for the waiting
         stats = self.q.stats(time.time())
         self.assertEqual(stats['wait']['count'], 20)
@@ -1074,23 +1107,16 @@ class TestEverything(TestQless):
         stats = self.q.stats(time.time())
         self.assertEqual(stats['wait']['count'], 0)
         self.assertEqual(stats['run' ]['count'], 0)
-        # This is /ugly/, but we're going to path the time function so
-        # that we can fake out how long these things are waiting
-        oldtime = time.time
-        now = time.time()
-        time.time = lambda: now
+        
+        time.freeze()
         jids = [self.q.put(qless.Job, {'test': 'stats_waiting', 'count': c}) for c in range(20)]
         jobs = self.q.pop(20)
         self.assertEqual(len(jobs), 20)
-        for i in range(len(jobs)):
-            time.time = lambda: (i + now)
-            jobs[i].complete()
-        # Make sure that we reset it to the old system time function!
-        time.time = oldtime
-        # Let's actually go ahead an add a test to make sure that the
-        # system time has been reset. If the system time has not, it
-        # could quite possibly impact the rest of the tests
-        self.assertTrue(sum(time.time() - time.time() for i in range(200)) < 0)
+        for job in jobs:
+            job.complete()
+            time.advance(1)
+        
+        time.unfreeze()
         # Now, make sure that we see stats for the waiting
         stats = self.q.stats(time.time())
         self.assertEqual(stats['run']['count'], 20)
@@ -1304,18 +1330,14 @@ class TestEverything(TestQless):
         stats = self.q.stats()
         self.assertEqual(stats['failures'], 1)
         self.assertEqual(stats['failed'  ], 1)
-        # Now let's fiddle with the time
-        oldtime = time.time
-        now = time.time()
-        time.time = lambda: now + 86400
+        
+        time.freeze(); time.advance(86400)
         job.move('testing')
         # Now check tomorrow's stats
         today = self.q.stats()
         self.assertEqual(today['failures'], 0)
         self.assertEqual(today['failed'  ], 0)
-        # Make sure that we reset it to the old system time function!
-        time.time = oldtime
-        self.assertTrue(sum(time.time() - time.time() for i in range(200)) < 0)
+        time.unfreeze()
         yesterday = self.q.stats()
         self.assertEqual(yesterday['failures'], 1)
         self.assertEqual(yesterday['failed']  , 0)
