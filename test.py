@@ -282,6 +282,8 @@ class TestRetry(TestQless):
         self.assertEqual(job.retries, job.remaining)
         job.retry()
         # Pop it off again
+        self.assertEqual(self.q.scheduled(), [])
+        self.assertEqual(self.client.job(job.jid).state, 'waiting')
         job = self.q.pop()
         self.assertNotEqual(job, None)
         self.assertEqual(job.retries, job.remaining + 1)
@@ -291,6 +293,7 @@ class TestRetry(TestQless):
         self.assertEqual(self.q.scheduled(), [jid])
         job = self.client.job(jid)
         self.assertEqual(job.retries, job.remaining + 2)
+        self.assertEqual(job.state, 'scheduled')
     
     def test_retry_fail(self):
         # Make sure that if we exhaust a job's retries, that it fails
