@@ -42,10 +42,11 @@ class Job(object):
     
     def __init__(self, client, **kwargs):
         self.client = client
-        for att in ['data', 'jid', 'klass', 'priority', 'tags', 'worker', 'state', 'tracked',
+        for att in ['data', 'jid', 'priority', 'tags', 'worker', 'state', 'tracked',
         'retries', 'remaining', 'failure', 'history', 'dependents', 'dependencies']:
             object.__setattr__(self, att, kwargs[att])
         
+        self.klass_name = kwargs['klass']
         self.expires_at = kwargs['expires']
         self.queue_name = kwargs['queue']
         # Because of how Lua parses JSON, empty tags comes through as {}
@@ -61,6 +62,10 @@ class Job(object):
             # An actual queue instance
             self.queue = self.client.queue(self.queue_name)
             return self.queue
+        elif key == 'klass':
+            # Get a reference to the provided klass
+            self.klass = self._import(self.klass_name)
+            return self.klass
     
     def __getitem__(self, key):
         return self.data.get(key)

@@ -484,7 +484,8 @@ class TestFail(TestQless):
         self.assertEqual(job.state     , 'failed')
         self.assertEqual(job.remaining , 5)
         self.assertEqual(job.retries   , 5)
-        self.assertEqual(job.klass     , 'qless.job.Job')
+        self.assertEqual(job.klass_name, 'qless.job.Job')
+        self.assertEqual(job.klass     , qless.Job)
         self.assertEqual(job.tags      , [])
     
     def test_pop_fail(self):
@@ -580,12 +581,13 @@ class TestEverything(TestQless):
         #   3) delete job
         jid = self.q.put(qless.Job, {'test': 'put_get'})
         job = self.client.job(jid)
-        self.assertEqual(job.priority, 0)
-        self.assertEqual(job.data    , {'test': 'put_get'})
-        self.assertEqual(job.tags    , [])
-        self.assertEqual(job.worker  , '')
-        self.assertEqual(job.state   , 'waiting')
-        self.assertEqual(job.klass   , 'qless.job.Job')
+        self.assertEqual(job.priority  , 0)
+        self.assertEqual(job.data      , {'test': 'put_get'})
+        self.assertEqual(job.tags      , [])
+        self.assertEqual(job.worker    , '')
+        self.assertEqual(job.state     , 'waiting')
+        self.assertEqual(job.klass_name, 'qless.job.Job')
+        self.assertEqual(job.klass     , qless.Job)
         # Make sure the times for the history match up
         job.history[0]['put'] = math.floor(job.history[0]['put'])
         self.assertEqual(job.history , [{
@@ -630,11 +632,12 @@ class TestEverything(TestQless):
         self.assertEqual(job.remaining , 5)
         self.assertEqual(job.retries   , 5)
         self.assertEqual(job.jid       , jid)
-        self.assertEqual(job.klass     , 'qless.job.Job')
+        self.assertEqual(job.klass_name, 'qless.job.Job')
+        self.assertEqual(job.klass     , qless.Job)
         self.assertEqual(job.tags      , [])
         jid = self.q.put(FooJob, {'test': 'test_put_pop_attributes'})
         job = self.q.pop()
-        self.assertTrue('FooJob' in job.klass)
+        self.assertTrue('FooJob' in job.klass_name)
     
     def test_data_access(self):
         # In this test, we'd like to make sure that all the data attributes
@@ -855,13 +858,14 @@ class TestEverything(TestQless):
         self.assertEqual(job.remaining , 5)
         self.assertEqual(job.retries   , 5)
         self.assertEqual(job.jid       , jid)
-        self.assertEqual(job.klass     , 'qless.job.Job')
+        self.assertEqual(job.klass_name, 'qless.job.Job')
+        self.assertEqual(job.klass     , qless.Job)
         self.assertEqual(job.tags      , [])
         jid = self.q.put(FooJob, {'test': 'test_put_pop_attributes'})
         # Pop off the first job
         job = self.q.pop()
         job = self.q.peek()
-        self.assertTrue('FooJob' in job.klass)
+        self.assertTrue('FooJob' in job.klass_name)
     
     def test_locks(self):
         # In this test, we're going to have two queues that point
