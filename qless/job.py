@@ -43,10 +43,11 @@ class Job(object):
     def __init__(self, client, **kwargs):
         self.client = client
         for att in ['data', 'jid', 'klass', 'priority', 'tags', 'worker', 'state', 'tracked',
-        'queue', 'retries', 'remaining', 'failure', 'history', 'dependents', 'dependencies']:
+        'retries', 'remaining', 'failure', 'history', 'dependents', 'dependencies']:
             object.__setattr__(self, att, kwargs[att])
         
         self.expires_at = kwargs['expires']
+        self.queue_name = kwargs['queue']
         # Because of how Lua parses JSON, empty tags comes through as {}
         self.tags         = self.tags         or []
         self.dependents   = self.dependents   or []
@@ -56,6 +57,10 @@ class Job(object):
         if key == 'ttl':
             # How long until this expires, in seconds
             return self.expires_at - time.time()
+        elif key == 'queue':
+            # An actual queue instance
+            self.queue = self.client.queue(self.queue_name)
+            return self.queue
     
     def __getitem__(self, key):
         return self.data.get(key)
@@ -71,7 +76,7 @@ class Job(object):
         s += '\tworker: %s\n' % self.worker
         s += '\texpires_at: %i\n' % self.expires_at
         s += '\tstate: %s\n' % self.state
-        s += '\tqueue: %s\n' % self.queue
+        s += '\tqueue: %s\n' % self.queue_name
         s += '\thistory:\n'
         for h in self.history:
             s += '\t\t%s (%s)\n' % (h['queue'], h['worker'])
@@ -96,25 +101,25 @@ class Job(object):
         # Based on the queue that this was in, we should call the appropriate
         # method. So if it was in the 'testing' queue, we should call 'testing'
         # If it doesn't have the appropriate function, we'll call process on it
-        method = getattr(mod, self.queue, getattr(mod, 'process', None))
+        method = getattr(mod, self.queue_name, getattr(mod, 'process', None))
         if method:
             if isinstance(method, types.FunctionType):
                 try:
-                    logger.info('Processing %s in %s' % (self.jid, self.queue))
+                    logger.info('Processing %s in %s' % (self.jid, self.queue_name))
                     method(self)
                     logger.info('Completed %s in %s' % (job.jid, queue.name))
                 except Exception as e:
                     # Make error type based on exception type
-                    logger.exception('Failed %s in %s: %s' % (self.jid, self.queue, repr(method)))
-                    self.fail(self.queue + '-' + e.__class__.__name__, traceback.format_exc())
+                    logger.exception('Failed %s in %s: %s' % (self.jid, self.queue_name, repr(method)))
+                    self.fail(self.queue_name + '-' + e.__class__.__name__, traceback.format_exc())
             else:
                 # Or fail with a message to that effect
-                logger.error('Failed %s in %s : %s is not static' % (self.jid, self.queue, repr(method)))
-                self.fail(self.queue + '-method-type', repr(method) + ' is not static')
+                logger.error('Failed %s in %s : %s is not static' % (self.jid, self.queue_name, repr(method)))
+                self.fail(self.queue_name + '-method-type', repr(method) + ' is not static')
         else:
             # Or fail with a message to that effect
-            logger.error('Failed %s : %s is missing a method "%s" or "process"' % (self.jid, self.klass, self.queue))
-            self.fail(self.queue + '-method-missing', self.klass + ' is missing a method "' + self.queue + '" or "process"')
+            logger.error('Failed %s : %s is missing a method "%s" or "process"' % (self.jid, self.klass, self.queue_name))
+            self.fail(self.queue_name + '-method-missing', self.klass + ' is missing a method "' + self.queue_name + '" or "process"')
     
     def move(self, queue, delay=0, depends=None):
         '''Put(1, queue, id, data, now, [priority, [tags, [delay]]])
@@ -129,7 +134,7 @@ class Job(object):
         a JSON array of the tags associated with the instance and the `valid after`
         argument should be in how many seconds the instance should be considered 
         actionable.'''
-        logger.info('Moving %s to %s from %s' % (self.jid, queue, self.queue))
+        logger.info('Moving %s to %s from %s' % (self.jid, queue, self.queue_name))
         return self.client._put([queue], [
             self.jid,
             self.klass,
@@ -145,13 +150,13 @@ class Job(object):
         Complete a job and optionally put it in another queue, either scheduled or to
         be considered waiting immediately.'''
         if next:
-            logger.info('Advancing %s to %s from %s' % (self.jid, next, self.queue))
-            return self.client._complete([], [self.jid, self.client.worker, self.queue,
+            logger.info('Advancing %s to %s from %s' % (self.jid, next, self.queue_name))
+            return self.client._complete([], [self.jid, self.client.worker, self.queue_name,
                 repr(time.time()), json.dumps(self.data), 'next', next, 'delay', delay or 0,
                 'depends', json.dumps(depends or [])]) or False
         else:
             logger.info('Completing %s' % self.jid)
-            return self.client._complete([], [self.jid, self.client.worker, self.queue,
+            return self.client._complete([], [self.jid, self.client.worker, self.queue_name,
                 repr(time.time()), json.dumps(self.data)]) or False
     
     def heartbeat(self):
@@ -207,7 +212,7 @@ class Job(object):
         return self.client._tag([], args)
     
     def retry(self, delay=0):
-        result = self.client._retry([], [self.jid, self.queue, self.worker, repr(time.time()), delay])
+        result = self.client._retry([], [self.jid, self.queue_name, self.worker, repr(time.time()), delay])
         if result == None:
             return False
         return result
