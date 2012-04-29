@@ -92,10 +92,8 @@ class Worker(object):
                     job = queue.pop()
                     if job:
                         seen = True
-                        logger.info('Processing %s in %s' % (job.jid, queue.name))
                         self.setproctitle('Working %s (%s)' % (job.jid, job.klass))
                         job.process()
-                        logger.info('Completed %s in %s' % (job.jid, queue.name))
                         self.clean()
                 
                 if not seen:

@@ -94,7 +94,9 @@ class Job(object):
         if method:
             if isinstance(method, types.FunctionType):
                 try:
+                    logger.info('Processing %s in %s' % (self.jid, self.queue))
                     method(self)
+                    logger.info('Completed %s in %s' % (job.jid, queue.name))
                 except Exception as e:
                     # Make error type based on exception type
                     logger.exception('Failed %s in %s: %s' % (self.jid, self.queue, repr(method)))
