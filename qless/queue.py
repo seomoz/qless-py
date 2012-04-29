@@ -5,6 +5,23 @@ import uuid
 from job import Job
 import simplejson as json
 
+class Jobs(object):
+    def __init__(self, name, client):
+        self.name   = name
+        self.client = client
+        
+    def running(self, offset=0, count=25):
+        return self.client._jobs([], ['running', repr(time.time()), self.name, offset, count])
+    
+    def stalled(self, offset=0, count=25):
+        return self.client._jobs([], ['stalled', repr(time.time()), self.name, offset, count])
+    
+    def scheduled(self, offset=0, count=25):
+        return self.client._jobs([], ['scheduled', repr(time.time()), self.name, offset, count])
+    
+    def depends(self, offset=0, count=25):
+        return self.client._jobs([], ['depends', repr(time.time()), self.name, offset, count])
+
 # The Queue class
 class Queue(object):
     def __init__(self, name, client, worker):
@@ -12,6 +29,12 @@ class Queue(object):
         self.client  = client
         self.worker  = worker
         self._hb     = 60
+    
+    def __getattr__(self, key):
+        if key == 'jobs':
+            self.jobs = Jobs(self.name, self.client)
+            return self.jobs
+        raise AttributeError('qless.Queue has no attribute %s' % key)
     
     def __setattr__(self, key, value):
         if key == 'heartbeat':
@@ -85,18 +108,6 @@ class Queue(object):
         day, the hour resolution for the first 3 days, and then at the day resolution
         from there on out. The `histogram` key is a list of those values.'''
         return json.loads(self.client._stats([], [self.name, date or repr(time.time())]))
-    
-    def running(self, offset=0, count=25):
-        return self.client._jobs([], ['running', repr(time.time()), self.name, offset, count])
-    
-    def stalled(self, offset=0, count=25):
-        return self.client._jobs([], ['stalled', repr(time.time()), self.name, offset, count])
-    
-    def scheduled(self, offset=0, count=25):
-        return self.client._jobs([], ['scheduled', repr(time.time()), self.name, offset, count])
-    
-    def depends(self, offset=0, count=25):
-        return self.client._jobs([], ['depends', repr(time.time()), self.name, offset, count])
     
     def __len__(self):
         with self.client.redis.pipeline() as p:
