@@ -12,6 +12,8 @@ parser.add_argument('--port', dest='port', default=6379, type=int,
     help='The port to connect to as the Redis server')
 parser.add_argument('--workers', dest='workers', default=psutil.NUM_CPUS, type=int,
     help='How many processes to run. Set to 0 to use all available cores')
+parser.add_argument('--greenlets', dest='greenlets', default=0, type=int,
+    help='How many greenlets to run in each process (if used, uses gevent)')
 parser.add_argument('--path', dest='paths', action='append', default=[],
     help='Path(s) to include when loading jobs')
 parser.add_argument('--queue', dest='queues', action='append', default=[],
@@ -32,7 +34,7 @@ args = parser.parse_args()
 import os
 import sys
 import qless
-from qless import worker, logger
+from qless import logger
 
 # Now let's add each of the paths to the python search path
 sys.path.extend([os.path.abspath(p) for p in args.paths])
@@ -49,7 +51,12 @@ for i in args.imports:
         logger.exception('Failed to import %s' % i)
 
 try:
-    worker.Worker(args.queues, args.host, args.port, args.workers, args.interval, args.workdir, hostname=args.hostname).run()
+    if args.greenlets:
+        from qless.gworker import Worker
+        Worker(args.queues, args.host, args.port, args.workers, args.interval, args.workdir, hostname=args.hostname, pool_size=args.greenlets).run()
+    else:
+        from qless.worker import Worker
+        Worker(args.queues, args.host, args.port, args.workers, args.interval, args.workdir, hostname=args.hostname).run()
 except Exception:
     logger.exception('Uncaught exception in qless.worker.Worker.run')
 
