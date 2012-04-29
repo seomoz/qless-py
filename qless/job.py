@@ -33,22 +33,17 @@ class Job(object):
         
         return getattr(mod, klass.rpartition('.')[2])
     
-    def __setattr__(self, key, value):
-        if key == 'priority':
-            if self.client._priority([], [self.jid, value]) != None:
-                object.__setattr__(self, key, value)
-        else:
-            object.__setattr__(self, key, value)
-    
     def __init__(self, client, **kwargs):
         self.client = client
-        for att in ['data', 'jid', 'priority', 'tags', 'worker', 'state', 'tracked',
-        'retries', 'remaining', 'failure', 'history', 'dependents', 'dependencies']:
+        for att in ['data', 'jid', 'priority', 'tags', 'worker', 'state',
+        'tracked', 'failure', 'history', 'dependents', 'dependencies']:
             object.__setattr__(self, att, kwargs[att])
         
         self.klass_name = kwargs['klass']
         self.expires_at = kwargs['expires']
         self.queue_name = kwargs['queue']
+        self.original_retries = kwargs['retries']
+        self.retries_left     = kwargs['remaining']
         # Because of how Lua parses JSON, empty tags comes through as {}
         self.tags         = self.tags         or []
         self.dependents   = self.dependents   or []
@@ -66,6 +61,14 @@ class Job(object):
             # Get a reference to the provided klass
             self.klass = self._import(self.klass_name)
             return self.klass
+        raise AttributeError('qless.Job has no attribute %s' % key)
+    
+    def __setattr__(self, key, value):
+        if key == 'priority':
+            if self.client._priority([], [self.jid, value]) != None:
+                object.__setattr__(self, key, value)
+        else:
+            object.__setattr__(self, key, value)
     
     def __getitem__(self, key):
         return self.data.get(key)

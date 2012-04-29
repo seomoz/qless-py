@@ -279,20 +279,20 @@ class TestRetry(TestQless):
     def test_retry(self):
         jid = self.q.put(qless.Job, {'test': 'test_retry'})
         job = self.q.pop()
-        self.assertEqual(job.retries, job.remaining)
+        self.assertEqual(job.original_retries, job.retries_left)
         job.retry()
         # Pop it off again
         self.assertEqual(self.q.scheduled(), [])
         self.assertEqual(self.client.job(job.jid).state, 'waiting')
         job = self.q.pop()
         self.assertNotEqual(job, None)
-        self.assertEqual(job.retries, job.remaining + 1)
+        self.assertEqual(job.original_retries, job.retries_left + 1)
         # Retry it again, with a backoff
         job.retry(60)
         self.assertEqual(self.q.pop(), None)
         self.assertEqual(self.q.scheduled(), [jid])
         job = self.client.job(jid)
-        self.assertEqual(job.retries, job.remaining + 2)
+        self.assertEqual(job.original_retries, job.retries_left + 2)
         self.assertEqual(job.state, 'scheduled')
     
     def test_retry_fail(self):
@@ -482,8 +482,8 @@ class TestFail(TestQless):
         self.assertEqual(job.data      , {'test': 'fail_failed'})
         self.assertEqual(job.worker    , '')
         self.assertEqual(job.state     , 'failed')
-        self.assertEqual(job.remaining , 5)
-        self.assertEqual(job.retries   , 5)
+        self.assertEqual(job.retries_left , 5)
+        self.assertEqual(job.original_retries   , 5)
         self.assertEqual(job.klass_name, 'qless.job.Job')
         self.assertEqual(job.klass     , qless.Job)
         self.assertEqual(job.tags      , [])
@@ -629,8 +629,8 @@ class TestEverything(TestQless):
         self.assertEqual(job.state     , 'running')
         self.assertEqual(job.queue_name, 'testing')
         self.assertEqual(job.queue.name, 'testing')
-        self.assertEqual(job.remaining , 5)
-        self.assertEqual(job.retries   , 5)
+        self.assertEqual(job.retries_left , 5)
+        self.assertEqual(job.original_retries   , 5)
         self.assertEqual(job.jid       , jid)
         self.assertEqual(job.klass_name, 'qless.job.Job')
         self.assertEqual(job.klass     , qless.Job)
@@ -855,8 +855,8 @@ class TestEverything(TestQless):
         self.assertEqual(job.state     , 'waiting')
         self.assertEqual(job.queue_name, 'testing')
         self.assertEqual(job.queue.name, 'testing')
-        self.assertEqual(job.remaining , 5)
-        self.assertEqual(job.retries   , 5)
+        self.assertEqual(job.retries_left , 5)
+        self.assertEqual(job.original_retries   , 5)
         self.assertEqual(job.jid       , jid)
         self.assertEqual(job.klass_name, 'qless.job.Job')
         self.assertEqual(job.klass     , qless.Job)
@@ -1263,10 +1263,10 @@ class TestEverything(TestQless):
         job = self.q.pop()
         self.assertNotEqual(job, None)
         job = self.q.pop()
-        self.assertEqual(job.remaining, 1)
+        self.assertEqual(job.retries_left, 1)
         job.complete()
         job = self.client.job(jid)
-        self.assertEqual(job.remaining, 2)
+        self.assertEqual(job.retries_left, 2)
     
     def test_retries_put(self):
         # In this test, we want to make sure that jobs have their number
@@ -1281,10 +1281,10 @@ class TestEverything(TestQless):
         job = self.q.pop()
         self.assertNotEqual(job, None)
         job = self.q.pop()
-        self.assertEqual(job.remaining, 1)
+        self.assertEqual(job.retries_left, 1)
         job.move('testing')
         job = self.client.job(jid)
-        self.assertEqual(job.remaining, 2)
+        self.assertEqual(job.retries_left, 2)
     
     def test_stats_failed(self):
         # In this test, we want to make sure that statistics are
