@@ -37,7 +37,7 @@ import qless
 from qless import logger
 
 # Now let's add each of the paths to the python search path
-sys.path.extend([os.path.abspath(p) for p in args.paths])
+sys.path = [os.path.abspath(p) for p in args.paths] + sys.path
 
 if args.verbose:
     import logging
