@@ -42,14 +42,20 @@ class Job(object):
     
     def __init__(self, client, **kwargs):
         self.client = client
-        for att in ['data', 'jid', 'klass', 'priority', 'tags', 'worker', 'expires', 'state', 'tracked',
+        for att in ['data', 'jid', 'klass', 'priority', 'tags', 'worker', 'state', 'tracked',
         'queue', 'retries', 'remaining', 'failure', 'history', 'dependents', 'dependencies']:
             object.__setattr__(self, att, kwargs[att])
         
+        self.expires_at = kwargs['expires']
         # Because of how Lua parses JSON, empty tags comes through as {}
         self.tags         = self.tags         or []
         self.dependents   = self.dependents   or []
         self.dependencies = self.dependencies or []
+    
+    def __getattr__(self, key):
+        if key == 'ttl':
+            # How long until this expires, in seconds
+            return self.expires_at - time.time()
     
     def __getitem__(self, key):
         return self.data.get(key)
@@ -63,7 +69,7 @@ class Job(object):
         s += '\tpriority: %i\n' % self.priority
         s += '\ttags: %s\n' % ', '.join(self.tags)
         s += '\tworker: %s\n' % self.worker
-        s += '\texpires: %i\n' % self.expires
+        s += '\texpires_at: %i\n' % self.expires_at
         s += '\tstate: %s\n' % self.state
         s += '\tqueue: %s\n' % self.queue
         s += '\thistory:\n'
@@ -110,10 +116,6 @@ class Job(object):
             logger.error('Failed %s : %s is missing a method "%s" or "process"' % (self.jid, self.klass, self.queue))
             self.fail(self.queue + '-method-missing', self.klass + ' is missing a method "' + self.queue + '" or "process"')
     
-    def ttl(self):
-        '''How long until this expires, in seconds'''
-        return self.expires - time.time()
-    
     def move(self, queue, delay=0, depends=None):
         '''Put(1, queue, id, data, now, [priority, [tags, [delay]]])
         ---------------------------------------------------------------    
@@ -156,8 +158,8 @@ class Job(object):
         '''Heartbeat(0, id, worker, expiration, [data])
         -------------------------------------------
         Renew the heartbeat, if possible, and optionally update the job's user data.'''
-        self.expires = float(self.client._heartbeat([], [self.jid, self.client.worker, repr(time.time()), json.dumps(self.data)]) or 0)
-        return self.expires
+        self.expires_at = float(self.client._heartbeat([], [self.jid, self.client.worker, repr(time.time()), json.dumps(self.data)]) or 0)
+        return self.expires_at
     
     def fail(self, group, message):
         '''Fail(0, id, worker, group, message, now, [data])

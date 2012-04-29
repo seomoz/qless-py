@@ -623,7 +623,7 @@ class TestEverything(TestQless):
         job = self.q.pop()
         self.assertEqual(job.data     , {'test': 'test_put_pop_attributes'})
         self.assertEqual(job.worker   , self.client.worker)
-        self.assertTrue( job.expires  > (time.time() - 20))
+        self.assertTrue( job.ttl      > 0)
         self.assertEqual(job.state    , 'running')
         self.assertEqual(job.queue    , 'testing')
         self.assertEqual(job.remaining, 5)
@@ -794,11 +794,11 @@ class TestEverything(TestQless):
         bjob = self.b.pop()
         self.assertEqual(bjob, None)
         self.assertTrue(isinstance(ajob.heartbeat(), float))
-        self.assertTrue(ajob.ttl() > 0)
+        self.assertTrue(ajob.ttl > 0)
         # Now try setting a queue-specific heartbeat
         self.q.heartbeat = -60
         self.assertTrue(isinstance(ajob.heartbeat(), float))
-        self.assertTrue(ajob.ttl() <= 0)
+        self.assertTrue(ajob.ttl <= 0)
     
     def test_heartbeat_expiration(self):
         # In this test, we want to make sure that when we heartbeat a 
