@@ -14,6 +14,43 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 logger.setLevel(logging.FATAL)
 
+class Jobs(object):
+    def __init__(self, client):
+        self.client = client
+    
+    def complete(self, offset=0, count=25):
+        return self.client._jobs([], ['complete', offset, count])
+    
+    def tracked(self):
+        results = json.loads(self.client._track([], []))
+        results['jobs'] = [Job(self, **j) for j in results['jobs']]
+        return results
+    
+    def tagged(self, tag, offset=0, count=25):
+        return json.loads(self.client._tag([], ['get', tag, offset, count]))
+    
+    def failed(self, group=None, start=0, limit=25):
+        '''Failed(0, [group, [start, [limit]]])
+        ---------------------------------------
+        If no type is provided, this returns a JSON blob of the counts of the various
+        types of failures known. If a type is provided, it will report up to `limit`
+        from `start` of the jobs affected by that issue. __Returns__ a JSON blob.'''
+        if not group:
+            return json.loads(self.client._failed([], []))
+        else:
+            results = json.loads(self.client._failed([], [group, start, limit]))
+            results['jobs'] = [Job(self.client, **j) for j in results['jobs']]
+            return results
+    
+    def __getitem__(self, id):
+        '''Get(0, id)
+        ----------
+        Get the data associated with a job'''
+        results = self.client._get([], [id])
+        if not results:
+            return None
+        return Job(self.client, **json.loads(results))
+
 class client(object):
     def __init__(self, host='localhost', port=6379, hostname = None, **kwargs):
         import os
@@ -25,6 +62,7 @@ class client(object):
         # instances simultaneously.
         self.redis  = redis.Redis(host, port, **kwargs)
         self.config = Config(self)
+        self.jobs   = Jobs(self)
         # Client's lua scripts
         for cmd in [
             'cancel', 'complete', 'depends', 'fail', 'failed', 'get', 'getconfig', 'heartbeat', 'jobs', 'peek',
@@ -39,46 +77,13 @@ class client(object):
             return json.loads(self._queues([], [time.time(), queue]))
         return json.loads(self._queues([], [time.time()]))
     
-    def tracked(self):
-        results = json.loads(self._track([], []))
-        results['jobs'] = [Job(self, **j) for j in results['jobs']]
-        return results
-    
-    def tagged(self, tag, offset=0, count=25):
-        return json.loads(self._tag([], ['get', tag, offset, count]))
-    
     def tags(self, offset=0, count=100):
         return json.loads(self._tag([], ['top', offset, count]))
-    
-    def complete(self, offset=0, count=25):
-        return self._jobs([], ['complete', offset, count])
-    
-    def failed(self, group=None, start=0, limit=25):
-        '''Failed(0, [group, [start, [limit]]])
-        ---------------------------------------
-        If no type is provided, this returns a JSON blob of the counts of the various
-        types of failures known. If a type is provided, it will report up to `limit`
-        from `start` of the jobs affected by that issue. __Returns__ a JSON blob.'''
-        if not group:
-            return json.loads(self._failed([], []))
-        else:
-            results = json.loads(self._failed([], [group, start, limit]))
-            results['jobs'] = [Job(self, **j) for j in results['jobs']]
-            return results
     
     def workers(self, worker=None):
         if worker:
             return json.loads(self._workers([], [time.time(), worker]))
         return json.loads(self._workers([], [time.time()]))
-    
-    def job(self, id):
-        '''Get(0, id)
-        ----------
-        Get the data associated with a job'''
-        results = self._get([], [id])
-        if not results:
-            return None
-        return Job(self, **json.loads(results))
 
 from lua import lua
 from job import Job
