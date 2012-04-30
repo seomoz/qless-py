@@ -99,17 +99,11 @@ class Job(object):
     def __repr__(self):
         return '<%s %s>' % (self.klass, self.jid)
     
-    def module(self):
-        # Return a reference to the class associated with this job. This is meant
-        # as a convenience in case users ever want to instantiate the class.
-        return Job._import(self.klass)
-    
     def process(self):
-        mod = self.module()
         # Based on the queue that this was in, we should call the appropriate
         # method. So if it was in the 'testing' queue, we should call 'testing'
         # If it doesn't have the appropriate function, we'll call process on it
-        method = getattr(mod, self.queue_name, getattr(mod, 'process', None))
+        method = getattr(self.klass, self.queue_name, getattr(self.klass, 'process', None))
         if method:
             if isinstance(method, types.FunctionType):
                 try:
