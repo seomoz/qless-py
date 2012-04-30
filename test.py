@@ -157,7 +157,18 @@ class TestDependencies(TestQless):
         
         a = self.q.put(qless.Job, {'test': 'cancel_dependency'})
         b = self.q.put(qless.Job, {'test': 'cancel_dependency'}, depends=[a])
-        self.assertRaises(Exception, self.client.jobs[a].cancel)
+        try:
+            self.client.jobs[a].cancel()
+            self.assertTrue(False, 'We should not be able to cancel jobs with dependencies')
+        except Exception as e:
+            self.assertTrue('Cancel()' in e.message, 'Cancel() threw the wrong error')
+        
+        # When canceling a job, we should remove that job from the jobs' list
+        # of dependents.
+        self.client.jobs[b].cancel()
+        self.assertEqual(self.client.jobs[a].dependents, [])
+        # We should also just be able to cancel a now
+        self.client.jobs[a].cancel()
     
     def test_depends_complete_advance(self):
         # If we make B depend on A, and then move A through several
