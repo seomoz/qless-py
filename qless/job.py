@@ -97,7 +97,7 @@ class Job(object):
         return s
     
     def __repr__(self):
-        return '<%s %s>' % (self.klass, self.jid)
+        return '<%s %s>' % (self.klass_name, self.jid)
     
     def process(self):
         # Based on the queue that this was in, we should call the appropriate
@@ -120,8 +120,8 @@ class Job(object):
                 self.fail(self.queue_name + '-method-type', repr(method) + ' is not static')
         else:
             # Or fail with a message to that effect
-            logger.error('Failed %s : %s is missing a method "%s" or "process"' % (self.jid, self.klass, self.queue_name))
-            self.fail(self.queue_name + '-method-missing', self.klass + ' is missing a method "' + self.queue_name + '" or "process"')
+            logger.error('Failed %s : %s is missing a method "%s" or "process"' % (self.jid, self.klass_name, self.queue_name))
+            self.fail(self.queue_name + '-method-missing', self.klass_name + ' is missing a method "' + self.queue_name + '" or "process"')
     
     def move(self, queue, delay=0, depends=None):
         '''Put(1, queue, id, data, now, [priority, [tags, [delay]]])
@@ -139,7 +139,7 @@ class Job(object):
         logger.info('Moving %s to %s from %s' % (self.jid, queue, self.queue_name))
         return self.client._put([queue], [
             self.jid,
-            self.klass,
+            self.klass_name,
             json.dumps(self.data),
             repr(time.time()),
             delay,
