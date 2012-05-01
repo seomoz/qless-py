@@ -109,7 +109,7 @@ class Job(object):
                 try:
                     logger.info('Processing %s in %s' % (self.jid, self.queue_name))
                     method(self)
-                    logger.info('Completed %s in %s' % (self.jid, queue.name))
+                    logger.info('Completed %s in %s' % (self.jid, self.queue_name))
                 except Exception as e:
                     # Make error type based on exception type
                     logger.exception('Failed %s in %s: %s' % (self.jid, self.queue_name, repr(method)))
