@@ -87,11 +87,11 @@ class Job(object):
         s += '\tqueue: %s\n' % self.queue_name
         s += '\thistory:\n'
         for h in self.history:
-            s += '\t\t%s (%s)\n' % (h['queue'], h['worker'])
+            s += '\t\t%s (%s)\n' % (h['q'], h.get('workers', ''))
             s += '\t\tput: %i\n' % h['put']
-            if h['popped']:
+            if h.get('popped'):
                 s += '\t\tpopped: %i\n' % h['popped']
-            if h['completed']:
+            if h.get('completed'):
                 s += '\t\tcompleted: %i\n' % h['completed']
         s += '\tdata: %s' % pprint.pformat(self.data)
         return s

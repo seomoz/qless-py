@@ -38,9 +38,7 @@ class TestQless(unittest.TestCase):
     def setUp(self):
         self.redis  = redis.Redis()
         
-        if len(self.redis.keys('*')):
-            print 'This test must be run with an empty redis instance'
-            exit(1)
+        assert(len(self.redis.keys('*')) == 0)
         
         # Clear the script cache, and nuke everything
         self.redis.execute_command('script', 'flush')
@@ -158,8 +156,7 @@ class TestDependencies(TestQless):
         a = self.q.put(qless.Job, {'test': 'cancel_dependency'})
         b = self.q.put(qless.Job, {'test': 'cancel_dependency'}, depends=[a])
         try:
-            self.client.jobs[a].cancel()
-            self.assertTrue(False, 'We should not be able to cancel jobs with dependencies')
+            self.assertTrue(self.client.jobs[a].cancel(), 'We should not be able to cancel jobs with dependencies')
         except Exception as e:
             self.assertTrue('Cancel()' in e.message, 'Cancel() threw the wrong error')
         
@@ -1832,6 +1829,67 @@ class TestEverything(TestQless):
         self.assertRaises(Exception, track, *([], ['track', 'deadbeef']))
         # Malformed time
         self.assertRaises(Exception, track, *([], ['track', 'deadbeef', 'howdy']))
+
+#################################
+# All the python-client-specific tests
+#################################
+class BarJob(object):
+    @staticmethod
+    def other(job):
+        job.fail('foo', 'bar')
+    
+    @staticmethod
+    def process(job):
+        job.complete()
+
+class FailJob(object):
+    @staticmethod
+    def testing(job):
+        raise Exception('foo')
+    
+    # This isn't a static method like it should be
+    def other(self, job):
+        job.complete()
+
+class MissingJob(object):
+    # This class doesn't have any appropriate methods
+    pass
+
+class TestPython(TestQless):
+    def test_job(self):
+        job = self.client.jobs[self.q.put(qless.Job, {})]
+        self.assertTrue(job.jid in str(job))
+        self.assertTrue(job.jid in repr(job))
+        self.assertRaises(AttributeError, lambda: job.foo)
+        job['testing'] = 'foo'
+        self.assertEqual(job['testing'], 'foo')
+    
+    def test_queue(self):
+        self.assertRaises(AttributeError, lambda: self.q.foo)
+    
+    def test_process(self):
+        jid = self.q.put(BarJob, {})
+        self.q.pop().process()
+        self.assertEqual(self.client.jobs[jid].state, 'complete')
+        
+        jid = self.other.put(BarJob, {})
+        self.other.pop().process()
+        self.assertEqual(self.client.jobs[jid].state, 'failed')
+        
+        jid = self.q.put(FailJob, {})
+        self.q.pop().process()
+        self.assertEqual(self.client.jobs[jid].state, 'failed')
+        
+        jid = self.other.put(FailJob, {})
+        self.other.pop().process()
+        self.assertEqual(self.client.jobs[jid].state, 'failed')
+        self.client.jobs[jid].move('other')
+        FailJob().other(self.other.pop())
+        self.assertEqual(self.client.jobs[jid].state, 'complete')
+        
+        jid = self.q.put(MissingJob, {})
+        self.q.pop().process()
+        self.assertEqual(self.client.jobs[jid].state, 'failed')
 
 if __name__ == '__main__':
     unittest.main()
