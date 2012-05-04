@@ -7,26 +7,24 @@ import argparse
 parser = argparse.ArgumentParser(description='Run qless workers.')
 
 parser.add_argument('--host', dest='host', default='localhost',
-    help='The host to connect to as the Redis server')
-parser.add_argument('--port', dest='port', default=6379, type=int,
-    help='The port to connect to as the Redis server')
-parser.add_argument('--workers', dest='workers', default=psutil.NUM_CPUS, type=int,
+    help='The host:port to connect to as the Redis server')
+parser.add_argument('-w', '--workers', default=psutil.NUM_CPUS, type=int,
     help='How many processes to run. Set to 0 to use all available cores')
-parser.add_argument('--greenlets', dest='greenlets', default=0, type=int,
+parser.add_argument('-g', '--greenlets', default=0, type=int,
     help='How many greenlets to run in each process (if used, uses gevent)')
-parser.add_argument('--path', dest='paths', action='append', default=[],
+parser.add_argument('-p', '--path', action='append', default=[],
     help='Path(s) to include when loading jobs')
-parser.add_argument('--queue', dest='queues', action='append', default=[],
+parser.add_argument('-q', '--queue', action='append', default=[],
     help='The queues to pull work from')
-parser.add_argument('--import', dest='imports', action='append', default=[],
+parser.add_argument('-m', '--import', action='append', default=[],
     help='The modules to preemptively import')
-parser.add_argument('--interval', dest='interval', default=60, type=int,
+parser.add_argument('-i', '--interval', default=60, type=int,
     help='The polling interval')
-parser.add_argument('--hostname', dest='hostname', default=None, type=str,
-    help='The hostname to identify as')
-parser.add_argument('--workdir', dest='workdir', default='.',
+parser.add_argument('-n', '--name', default=None, type=str,
+    help='The hostname to identify your worker as')
+parser.add_argument('-d', '--workdir', default='.',
     help='The base work directory path')
-parser.add_argument('--verbose', dest='verbose', default=False, action='store_true',
+parser.add_argument('-v', '--verbose', default=False, action='store_true',
     help='Be extra talkative')
 
 args = parser.parse_args()
@@ -37,14 +35,14 @@ import qless
 from qless import logger
 
 # Now let's add each of the paths to the python search path
-sys.path = [os.path.abspath(p) for p in args.paths] + sys.path
+sys.path = [os.path.abspath(p) for p in args.path] + sys.path
 
 if args.verbose:
     import logging
     logger.setLevel(logging.DEBUG)
 
 # Now let's import all the modules and packages we've been asked to import
-for i in args.imports:
+for i in getattr(args, 'import'):
     try:
         logger.info('Loaded %s' % repr(__import__(i)))
     except Exception:
@@ -53,10 +51,10 @@ for i in args.imports:
 try:
     if args.greenlets:
         from qless.gworker import Worker
-        Worker(args.queues, args.host, args.port, args.workers, args.interval, args.workdir, hostname=args.hostname, pool_size=args.greenlets).run()
+        Worker(args.queue, args.host, args.workers, args.interval, args.workdir, hostname=args.name, pool_size=args.greenlets).run()
     else:
         from qless.worker import Worker
-        Worker(args.queues, args.host, args.port, args.workers, args.interval, args.workdir, hostname=args.hostname).run()
+        Worker(args.queue, args.host, args.workers, args.interval, args.workdir, hostname=args.name).run()
 except Exception:
     logger.exception('Uncaught exception in qless.worker.Worker.run')
 

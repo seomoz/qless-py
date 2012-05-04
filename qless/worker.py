@@ -16,20 +16,22 @@ except ImportError:
         pass
 
 class Worker(object):
-    def __init__(self, queues, host='localhost', port=6579, workers=None, interval=60, workdir='.', **kwargs):
-        self.client    = qless.client(host, port, **kwargs)
-        self.count     = workers or psutil.NUM_CPUS
-        self.interval  = interval
-        self.queues    = [self.client.queue(q) for q in queues]
-        self.sandboxes = {}
+    def __init__(self, queues, host='localhost', workers=None, interval=60, workdir='.', **kwargs):
+        _host, s, _port = host.partition(':')
+        _port           = int(_port or 6379)
+        self.client     = qless.client(_host, _port, **kwargs)
+        self.count      = workers or psutil.NUM_CPUS
+        self.interval   = interval
+        self.queues     = [self.client.queue(q) for q in queues]
+        self.sandboxes  = {}
         # This is for filesystem sandboxing. Each worker has
         # a directory associated with it, which it should make
         # sure is the working directory in which it runs each
         # of the jobs. It should also ensure that the directory
         # exists, and clobbers files before each run, and after.
-        self.workdir   = os.path.abspath(workdir)
-        self.sandbox   = self.workdir
-        self.master    = True
+        self.workdir    = os.path.abspath(workdir)
+        self.sandbox    = self.workdir
+        self.master     = True
     
     def run(self):
         for i in range(self.count):
