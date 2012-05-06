@@ -14,7 +14,7 @@ class lua(object):
     def reload(self):
         data = pkgutil.get_data('qless', 'qless-core/' + self.name + '.lua')
         self.sha = self.redis.execute_command('script', 'load', data)
-        logger.debug('Loaded script ' + self.sha)
+        logger.debug('Loaded script %s (%s)' % (self.name, repr(self.sha)))
     
     def __call__(self, keys, args):
         if self.sha == None:

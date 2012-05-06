@@ -24,6 +24,8 @@ parser.add_argument('-n', '--name', default=None, type=str,
     help='The hostname to identify your worker as')
 parser.add_argument('-d', '--workdir', default='.',
     help='The base work directory path')
+parser.add_argument('-r', '--resume', default=False, action='store_true',
+    help='Try to resume jobs when the worker agent is restarted')
 parser.add_argument('-v', '--verbose', default=False, action='store_true',
     help='Be extra talkative')
 
@@ -51,10 +53,10 @@ for i in getattr(args, 'import'):
 try:
     if args.greenlets:
         from qless.gworker import Worker
-        Worker(args.queue, args.host, args.workers, args.interval, args.workdir, hostname=args.name, pool_size=args.greenlets).run()
+        Worker(args.queue, args.host, args.workers, args.interval, args.workdir, hostname=args.name, resume=args.resume, pool_size=args.greenlets).run()
     else:
         from qless.worker import Worker
-        Worker(args.queue, args.host, args.workers, args.interval, args.workdir, hostname=args.name).run()
+        Worker(args.queue, args.host, args.workers, args.interval, args.workdir, hostname=args.name, resume=args.resume).run()
 except Exception:
     logger.exception('Uncaught exception in qless.worker.Worker.run')
 

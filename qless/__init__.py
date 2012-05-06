@@ -82,7 +82,10 @@ class client(object):
     
     def workers(self, worker=None):
         if worker:
-            return json.loads(self._workers([], [time.time(), worker]))
+            result = json.loads(self._workers([], [time.time(), worker]))
+            result['jobs']    = result['jobs'] or []
+            result['stalled'] = result['stalled'] or []
+            return result
         return json.loads(self._workers([], [time.time()]))
 
 from lua import lua

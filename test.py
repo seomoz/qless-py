@@ -332,9 +332,9 @@ class TestRetry(TestQless):
         # any longer
         jid = self.q.put(qless.Job, {'test': 'test_retry_workers'})
         job = self.q.pop()
-        self.assertEqual(self.client.workers(self.client.worker), {'jobs': [jid], 'stalled': {}})
+        self.assertEqual(self.client.workers(self.client.worker), {'jobs': [jid], 'stalled': []})
         self.assertEqual(job.retry(), 4)
-        self.assertEqual(self.client.workers(self.client.worker), {'jobs': {}, 'stalled': {}})
+        self.assertEqual(self.client.workers(self.client.worker), {'jobs': [], 'stalled': []})
 
 class TestPriority(TestQless):
     # Basically all we need to test:
@@ -1382,7 +1382,7 @@ class TestEverything(TestQless):
         # Not get specific worker information
         worker = self.client.workers(self.q.worker)
         self.assertEqual(worker['jobs']   , [jid])
-        self.assertEqual(worker['stalled'], {})
+        self.assertEqual(worker['stalled'], [])
     
     def test_workers_cancel(self):
         # In this test, we want to verify that when a job is canceled,
@@ -1401,7 +1401,7 @@ class TestEverything(TestQless):
         }])
         self.assertEqual(self.client.workers(self.q.worker), {
             'jobs'   : [jid],
-            'stalled': {}
+            'stalled': []
         })
         # Now cancel the job
         job.cancel()
@@ -1411,8 +1411,8 @@ class TestEverything(TestQless):
             'stalled': 0
         }])
         self.assertEqual(self.client.workers(self.q.worker), {
-            'jobs'   : {},
-            'stalled': {}
+            'jobs'   : [],
+            'stalled': []
         })
     
     def test_workers_lost_lock(self):
@@ -1435,7 +1435,7 @@ class TestEverything(TestQless):
             'stalled': 1
         }])
         self.assertEqual(self.client.workers(self.q.worker), {
-            'jobs'   : {},
+            'jobs'   : [],
             'stalled': [jid]
         })
         # Now, let's pop it with a different worker
@@ -1451,8 +1451,8 @@ class TestEverything(TestQless):
             'stalled': 0
         }])
         self.assertEqual(self.client.workers(self.q.worker), {
-            'jobs'   : {},
-            'stalled': {}
+            'jobs'   : [],
+            'stalled': []
         })
     
     def test_workers_fail(self):
@@ -1471,7 +1471,7 @@ class TestEverything(TestQless):
         }])
         self.assertEqual(self.client.workers(self.q.worker), {
             'jobs'   : [jid],
-            'stalled': {}
+            'stalled': []
         })
         # Now, let's fail it
         job.fail('foo', 'bar')
@@ -1481,8 +1481,8 @@ class TestEverything(TestQless):
             'stalled': 0
         }])
         self.assertEqual(self.client.workers(self.q.worker), {
-            'jobs'   : {},
-            'stalled': {}
+            'jobs'   : [],
+            'stalled': []
         })
     
     def test_workers_complete(self):
@@ -1500,7 +1500,7 @@ class TestEverything(TestQless):
         }])
         self.assertEqual(self.client.workers(self.q.worker), {
             'jobs'   : [jid],
-            'stalled': {}
+            'stalled': []
         })
         # Now complete it
         job.complete()
@@ -1510,8 +1510,8 @@ class TestEverything(TestQless):
             'stalled': 0
         }])
         self.assertEqual(self.client.workers(self.q.worker), {
-            'jobs'   : {},
-            'stalled': {}
+            'jobs'   : [],
+            'stalled': []
         })
     
     def test_workers_reput(self):
@@ -1530,7 +1530,7 @@ class TestEverything(TestQless):
         }])
         self.assertEqual(self.client.workers(self.q.worker), {
             'jobs'   : [jid],
-            'stalled': {}
+            'stalled': []
         })
         job.move('other')
         self.assertEqual(self.client.workers(), [{
@@ -1539,8 +1539,8 @@ class TestEverything(TestQless):
             'stalled': 0
         }])
         self.assertEqual(self.client.workers(self.q.worker), {
-            'jobs'   : {},
-            'stalled': {}
+            'jobs'   : [],
+            'stalled': []
         })
     
     def test_running_stalled_scheduled_depends(self):

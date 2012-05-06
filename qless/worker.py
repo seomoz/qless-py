@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 
 import os
+import math
 import time
 import qless
 import shutil
@@ -9,6 +10,12 @@ import signal
 import logging
 from qless import logger
 
+# This meta-information about the worker you're running on
+meta = {
+    'worker_id': 0,
+    'sandbox'  : '/dev/null'
+}
+
 try:
     from setproctitle import setproctitle
 except ImportError:
@@ -16,13 +23,16 @@ except ImportError:
         pass
 
 class Worker(object):
-    def __init__(self, queues, host='localhost', workers=None, interval=60, workdir='.', **kwargs):
+    def __init__(self, queues, host='localhost', workers=None, interval=60, workdir='.', resume=False, **kwargs):
         _host, s, _port = host.partition(':')
         _port           = int(_port or 6379)
-        self.client     = qless.client(_host, _port, **kwargs)
+        self.host       = _host
+        self.port       = _port
+        self.client     = qless.client(self.host, self.port)
         self.count      = workers or psutil.NUM_CPUS
         self.interval   = interval
-        self.queues     = [self.client.queue(q) for q in queues]
+        self.queues     = queues
+        self.resume     = resume
         self.sandboxes  = {}
         # This is for filesystem sandboxing. Each worker has
         # a directory associated with it, which it should make
@@ -31,32 +41,73 @@ class Worker(object):
         # exists, and clobbers files before each run, and after.
         self.workdir    = os.path.abspath(workdir)
         self.sandbox    = self.workdir
+        # I'm the parent, so I have a negative worker id
+        self.worker_id  = -1
         self.master     = True
+        # These are the job ids that I should get to first, before
+        # picking off other jobs
+        self.jids       = []
     
     def run(self):
+        # If this worker is meant to be resumable, then we should find out
+        # what jobs this worker was working on beforehand.
+        if self.resume:
+            jids_to_resume = self.client.workers(self.client.worker)['jobs']
+        else:
+            jids_to_resume = []
+        
         for i in range(self.count):
-            sandbox = os.path.join(self.workdir, 'qless-py-workers', 'sandbox-%i' % i)
+            slot = {
+                'worker_id': i,
+                'sandbox'  : os.path.join(self.workdir, 'qless-py-workers', 'sandbox-%i' % i)
+            }
             cpid = os.fork()
             if cpid:
                 logger.info('Spawned worker %i' % cpid)
-                self.sandboxes[cpid] = sandbox
+                self.sandboxes[cpid] = slot
             else:
-                self.master  = False
-                self.sandbox = sandbox
+                # Set the value of the metadata so that jobs can detect
+                # what worker they're running on
+                import qless.worker
+                qless.worker.meta = slot
+                # Make note that we're not the master, and then save our
+                # sandbox and worker id for reference
+                self.master    = False
+                self.sandbox   = slot['sandbox']
+                self.worker_id = slot['worker_id']
+                # Also, we should take our share of the jobs that we want
+                # to resume, if any.
+                start = (i     * len(jids_to_resume)) / self.count
+                end   = ((i+1) * len(jids_to_resume)) / self.count
+                self.jids      = jids_to_resume[start:end]
                 return self.work()
         
         while self.master:
             try:
                 pid, status = os.wait()
                 logger.warn('Worker %i died with status %i from signal %i' % (pid, status >> 8, status & 0xff))
-                sandbox = self.sandboxes.pop(pid)
+                slot = self.sandboxes.pop(pid)
                 cpid = os.fork()
                 if cpid:
                     logger.info('Spawned replacement worker %i' % cpid)
-                    self.sandboxes[cpid] = sandbox
+                    self.sandboxes[cpid] = slot
                 else:
-                    self.master  = False
-                    self.sandbox = sandbox
+                    # Set the value of the metadata so that jobs can detect
+                    # what worker they're running on
+                    import qless.worker
+                    qless.worker.meta = slot
+                    # Make note that we're not the master, and then save our
+                    # sandbox and worker id for reference
+                    self.master    = False
+                    self.sandbox   = slot['sandbox']
+                    self.worker_id = slot['worker_id']
+                    # NOTE: In the case that the worker died, we're going to
+                    # assume that something about the job(s) it was working 
+                    # made the worker exit, and so we're going to ignore any
+                    # jobs that we might have been working on. It's also 
+                    # significantly more difficult than the above problem of
+                    # simply distributing work to /new/ workers, rather than
+                    # a respawned worker.
                     return self.work()
             except KeyboardInterrupt:
                 break
@@ -84,9 +135,29 @@ class Worker(object):
         setproctitle(base + message)
     
     def work(self):
+        # We should probably open up our own redis client
+        self.client = qless.client(self.host, self.port)
+        self.queues = [self.client.queue(q) for q in self.queues]
+        
         if not os.path.isdir(self.sandbox):
             os.makedirs(self.sandbox)
         self.clean()
+        # First things first, we should clear out any jobs that
+        # we're responsible for off-hand
+        while len(self.jids):
+            try:
+                job = self.client.jobs[self.jids.pop(0)]
+                # If we still have access to it, then we should process it
+                if job.heartbeat():
+                    logger.info('Resuming %s' % job.jid)
+                    self.setproctitle('Working %s (%s)' % (job.jid, job.klass_name))
+                    job.process()
+                    self.clean()
+                else:
+                    logger.warn('Lost heart on would-be resumed job %s' % job.jid)
+            except KeyboardInterrupt:
+                return
+        
         while True:
             try:
                 seen = False
@@ -94,7 +165,7 @@ class Worker(object):
                     job = queue.pop()
                     if job:
                         seen = True
-                        self.setproctitle('Working %s (%s)' % (job.jid, job.klass))
+                        self.setproctitle('Working %s (%s)' % (job.jid, job.klass_name))
                         job.process()
                         self.clean()
                 
