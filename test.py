@@ -49,10 +49,10 @@ class TestQless(unittest.TestCase):
         self.q = self.client.queue('testing')
         
         # This represents worker 'a'
-        tmp = qless.client(); tmp.worker = 'worker-a'
+        tmp = qless.client(); tmp.worker_name = 'worker-a'
         self.a = tmp.queue('testing')
         # This represents worker b
-        tmp = qless.client(); tmp.worker = 'worker-b'
+        tmp = qless.client(); tmp.worker_name = 'worker-b'
         self.b = tmp.queue('testing')
                 
         # This is just a second queue
@@ -321,9 +321,9 @@ class TestRetry(TestQless):
         self.q.pop().fail('foo', 'bar')
         self.assertEqual(self.client.jobs[job.jid].retry(), False)
         self.client.jobs[job.jid].move('testing')
-        job = self.q.pop(); job.worker = 'foobar'
+        job = self.q.pop(); job.worker_name = 'foobar'
         self.assertEqual(job.retry(), False)
-        job.worker = self.client.worker
+        job.worker_name = self.client.worker_name
         job.complete()
         self.assertEqual(job.retry(), False)
     
@@ -332,9 +332,9 @@ class TestRetry(TestQless):
         # any longer
         jid = self.q.put(qless.Job, {'test': 'test_retry_workers'})
         job = self.q.pop()
-        self.assertEqual(self.client.workers(self.client.worker), {'jobs': [jid], 'stalled': []})
+        self.assertEqual(self.client.workers[self.client.worker_name], {'jobs': [jid], 'stalled': []})
         self.assertEqual(job.retry(), 4)
-        self.assertEqual(self.client.workers(self.client.worker), {'jobs': [], 'stalled': []})
+        self.assertEqual(self.client.workers[self.client.worker_name], {'jobs': [], 'stalled': []})
 
 class TestPriority(TestQless):
     # Basically all we need to test:
@@ -484,17 +484,17 @@ class TestFail(TestQless):
         results = self.client.jobs.failed('foo')
         self.assertEqual(results['total'], 1)
         job = results['jobs'][0]
-        self.assertEqual(job.jid       , jid)
-        self.assertEqual(job.queue_name, 'testing')
-        self.assertEqual(job.queue.name, 'testing')
-        self.assertEqual(job.data      , {'test': 'fail_failed'})
-        self.assertEqual(job.worker    , '')
-        self.assertEqual(job.state     , 'failed')
+        self.assertEqual(job.jid        , jid)
+        self.assertEqual(job.queue_name , 'testing')
+        self.assertEqual(job.queue.name , 'testing')
+        self.assertEqual(job.data       , {'test': 'fail_failed'})
+        self.assertEqual(job.worker_name, '')
+        self.assertEqual(job.state      , 'failed')
         self.assertEqual(job.retries_left , 5)
         self.assertEqual(job.original_retries   , 5)
-        self.assertEqual(job.klass_name, 'qless.job.Job')
-        self.assertEqual(job.klass     , qless.Job)
-        self.assertEqual(job.tags      , [])
+        self.assertEqual(job.klass_name , 'qless.job.Job')
+        self.assertEqual(job.klass      , qless.Job)
+        self.assertEqual(job.tags       , [])
     
     def test_pop_fail(self):
         # In this test, we want to make sure that we can pop a job,
@@ -589,13 +589,13 @@ class TestEverything(TestQless):
         #   3) delete job
         jid = self.q.put(qless.Job, {'test': 'put_get'})
         job = self.client.jobs[jid]
-        self.assertEqual(job.priority  , 0)
-        self.assertEqual(job.data      , {'test': 'put_get'})
-        self.assertEqual(job.tags      , [])
-        self.assertEqual(job.worker    , '')
-        self.assertEqual(job.state     , 'waiting')
-        self.assertEqual(job.klass_name, 'qless.job.Job')
-        self.assertEqual(job.klass     , qless.Job)
+        self.assertEqual(job.priority   , 0)
+        self.assertEqual(job.data       , {'test': 'put_get'})
+        self.assertEqual(job.tags       , [])
+        self.assertEqual(job.worker_name, '')
+        self.assertEqual(job.state      , 'waiting')
+        self.assertEqual(job.klass_name , 'qless.job.Job')
+        self.assertEqual(job.klass      , qless.Job)
         # Make sure the times for the history match up
         job.history[0]['put'] = math.floor(job.history[0]['put'])
         self.assertEqual(job.history , [{
@@ -631,18 +631,18 @@ class TestEverything(TestQless):
         jid = self.q.put(qless.Job, {'test': 'test_put_pop_attributes'})
         self.client.config.set('heartbeat', 60)
         job = self.q.pop()
-        self.assertEqual(job.data      , {'test': 'test_put_pop_attributes'})
-        self.assertEqual(job.worker    , self.client.worker)
-        self.assertTrue( job.ttl       > 0)
-        self.assertEqual(job.state     , 'running')
-        self.assertEqual(job.queue_name, 'testing')
-        self.assertEqual(job.queue.name, 'testing')
+        self.assertEqual(job.data       , {'test': 'test_put_pop_attributes'})
+        self.assertEqual(job.worker_name, self.client.worker_name)
+        self.assertTrue( job.ttl        > 0)
+        self.assertEqual(job.state      , 'running')
+        self.assertEqual(job.queue_name , 'testing')
+        self.assertEqual(job.queue.name , 'testing')
         self.assertEqual(job.retries_left , 5)
         self.assertEqual(job.original_retries   , 5)
-        self.assertEqual(job.jid       , jid)
-        self.assertEqual(job.klass_name, 'qless.job.Job')
-        self.assertEqual(job.klass     , qless.Job)
-        self.assertEqual(job.tags      , [])
+        self.assertEqual(job.jid        , jid)
+        self.assertEqual(job.klass_name , 'qless.job.Job')
+        self.assertEqual(job.klass      , qless.Job)
+        self.assertEqual(job.tags       , [])
         jid = self.q.put(FooJob, {'test': 'test_put_pop_attributes'})
         job = self.q.pop()
         self.assertTrue('FooJob' in job.klass_name)
@@ -858,17 +858,17 @@ class TestEverything(TestQless):
         #   2) peek said job, check existence of attributes
         jid = self.q.put(qless.Job, {'test': 'test_put_pop_attributes'})
         job = self.q.peek()
-        self.assertEqual(job.data      , {'test': 'test_put_pop_attributes'})
-        self.assertEqual(job.worker    , '')
-        self.assertEqual(job.state     , 'waiting')
-        self.assertEqual(job.queue_name, 'testing')
-        self.assertEqual(job.queue.name, 'testing')
+        self.assertEqual(job.data       , {'test': 'test_put_pop_attributes'})
+        self.assertEqual(job.worker_name, '')
+        self.assertEqual(job.state      , 'waiting')
+        self.assertEqual(job.queue_name , 'testing')
+        self.assertEqual(job.queue.name , 'testing')
         self.assertEqual(job.retries_left , 5)
         self.assertEqual(job.original_retries   , 5)
-        self.assertEqual(job.jid       , jid)
-        self.assertEqual(job.klass_name, 'qless.job.Job')
-        self.assertEqual(job.klass     , qless.Job)
-        self.assertEqual(job.tags      , [])
+        self.assertEqual(job.jid        , jid)
+        self.assertEqual(job.klass_name , 'qless.job.Job')
+        self.assertEqual(job.klass      , qless.Job)
+        self.assertEqual(job.tags       , [])
         jid = self.q.put(FooJob, {'test': 'test_put_pop_attributes'})
         # Pop off the first job
         job = self.q.pop()
@@ -965,9 +965,9 @@ class TestEverything(TestQless):
         self.assertEqual(job.complete(), 'complete')
         job = self.client.jobs[jid]
         self.assertEqual(math.floor(job.history[-1]['done']), math.floor(time.time()))
-        self.assertEqual(job.state     , 'complete')
-        self.assertEqual(job.worker    , '')
-        self.assertEqual(job.queue_name, '')
+        self.assertEqual(job.state      , 'complete')
+        self.assertEqual(job.worker_name, '')
+        self.assertEqual(job.queue_name , '')
         self.assertEqual(len(self.q), 0)
         self.assertEqual(self.client.jobs.complete(), [jid])
         
@@ -995,10 +995,10 @@ class TestEverything(TestQless):
         self.assertEqual(len(job.history), 2)
         self.assertEqual(math.floor(job.history[-2]['done']), math.floor(time.time()))
         self.assertEqual(math.floor(job.history[-1]['put' ]), math.floor(time.time()))
-        self.assertEqual(job.state     , 'waiting')
-        self.assertEqual(job.worker    , '')
-        self.assertEqual(job.queue_name, 'testing')
-        self.assertEqual(job.queue.name, 'testing')
+        self.assertEqual(job.state      , 'waiting')
+        self.assertEqual(job.worker_name, '')
+        self.assertEqual(job.queue_name , 'testing')
+        self.assertEqual(job.queue.name , 'testing')
         self.assertEqual(len(self.q), 1)
     
     def test_complete_fail(self):
@@ -1016,13 +1016,13 @@ class TestEverything(TestQless):
         self.assertNotEqual(ajob, None)
         bjob = self.b.pop()
         self.assertNotEqual(bjob, None)
-        self.assertEqual(ajob.complete(), False)
-        self.assertEqual(bjob.complete(), 'complete')
+        self.assertEqual(ajob.complete() , False)
+        self.assertEqual(bjob.complete() , 'complete')
         job = self.client.jobs[jid]
         self.assertEqual(math.floor(job.history[-1]['done']), math.floor(time.time()))
-        self.assertEqual(job.state     , 'complete')
-        self.assertEqual(job.worker    , '')
-        self.assertEqual(job.queue_name, '')
+        self.assertEqual(job.state      , 'complete')
+        self.assertEqual(job.worker_name, '')
+        self.assertEqual(job.queue_name , '')
         self.assertEqual(len(self.q), 0)
     
     def test_complete_state(self):
@@ -1371,18 +1371,18 @@ class TestEverything(TestQless):
         #   4) Ensure unempty 'workers'
         #   5) Ensure unempty 'worker'
         jid = self.q.put(qless.Job, {'test':'workers'})
-        self.assertEqual(self.client.workers(), {})
+        self.assertEqual(self.client.workers.all(), {})
         job = self.q.pop()
-        workers = self.client.workers()
-        self.assertEqual(workers, [{
-            'name'   : self.q.worker,
+        self.assertEqual(self.client.workers.all(), [{
+            'name'   : self.q.worker_name,
             'jobs'   : 1,
             'stalled': 0
         }])
-        # Not get specific worker information
-        worker = self.client.workers(self.q.worker)
-        self.assertEqual(worker['jobs']   , [jid])
-        self.assertEqual(worker['stalled'], [])
+        # Now get specific worker information
+        self.assertEqual(self.client.workers[self.q.worker_name], {
+            'jobs'   : [jid],
+            'stalled': []
+        })
     
     def test_workers_cancel(self):
         # In this test, we want to verify that when a job is canceled,
@@ -1394,23 +1394,23 @@ class TestEverything(TestQless):
         #   5) Ensure 'workers' and 'worker' reflect that
         jid = self.q.put(qless.Job, {'test':'workers_cancel'})
         job = self.q.pop()
-        self.assertEqual(self.client.workers(), [{
-            'name'   : self.q.worker,
+        self.assertEqual(self.client.workers.all(), [{
+            'name'   : self.q.worker_name,
             'jobs'   : 1,
             'stalled': 0
         }])
-        self.assertEqual(self.client.workers(self.q.worker), {
+        self.assertEqual(self.client.workers[self.q.worker_name], {
             'jobs'   : [jid],
             'stalled': []
         })
         # Now cancel the job
         job.cancel()
-        self.assertEqual(self.client.workers(), [{
-            'name'   : self.q.worker,
+        self.assertEqual(self.client.workers.all(), [{
+            'name'   : self.q.worker_name,
             'jobs'   : 0,
             'stalled': 0
         }])
-        self.assertEqual(self.client.workers(self.q.worker), {
+        self.assertEqual(self.client.workers[self.q.worker_name], {
             'jobs'   : [],
             'stalled': []
         })
@@ -1429,28 +1429,28 @@ class TestEverything(TestQless):
         jid = self.q.put(qless.Job, {'test':'workers_lost_lock'})
         self.client.config.set('heartbeat', -10)
         job = self.q.pop()
-        self.assertEqual(self.client.workers(), [{
-            'name'   : self.q.worker,
+        self.assertEqual(self.client.workers.all(), [{
+            'name'   : self.q.worker_name,
             'jobs'   : 0,
             'stalled': 1
         }])
-        self.assertEqual(self.client.workers(self.q.worker), {
+        self.assertEqual(self.client.workers[self.q.worker_name], {
             'jobs'   : [],
             'stalled': [jid]
         })
         # Now, let's pop it with a different worker
         self.client.config.set('heartbeat')
         job = self.a.pop()
-        self.assertEqual(self.client.workers(), [{
-            'name'   : self.a.worker,
+        self.assertEqual(self.client.workers.all(), [{
+            'name'   : self.a.worker_name,
             'jobs'   : 1,
             'stalled': 0
         }, {
-            'name'   : self.q.worker,
+            'name'   : self.q.worker_name,
             'jobs'   : 0,
             'stalled': 0
         }])
-        self.assertEqual(self.client.workers(self.q.worker), {
+        self.assertEqual(self.client.workers[self.q.worker_name], {
             'jobs'   : [],
             'stalled': []
         })
@@ -1464,23 +1464,23 @@ class TestEverything(TestQless):
         #   4) Check 'workers', 'worker'
         jid = self.q.put(qless.Job, {'test':'workers_fail'})
         job = self.q.pop()
-        self.assertEqual(self.client.workers(), [{
-            'name'   : self.q.worker,
+        self.assertEqual(self.client.workers.all(), [{
+            'name'   : self.q.worker_name,
             'jobs'   : 1,
             'stalled': 0
         }])
-        self.assertEqual(self.client.workers(self.q.worker), {
+        self.assertEqual(self.client.workers[self.q.worker_name], {
             'jobs'   : [jid],
             'stalled': []
         })
         # Now, let's fail it
         job.fail('foo', 'bar')
-        self.assertEqual(self.client.workers(), [{
-            'name'   : self.q.worker,
+        self.assertEqual(self.client.workers.all(), [{
+            'name'   : self.q.worker_name,
             'jobs'   : 0,
             'stalled': 0
         }])
-        self.assertEqual(self.client.workers(self.q.worker), {
+        self.assertEqual(self.client.workers[self.q.worker_name], {
             'jobs'   : [],
             'stalled': []
         })
@@ -1493,23 +1493,23 @@ class TestEverything(TestQless):
         #   3) Complete job, check 'workers', 'worker'
         jid = self.q.put(qless.Job, {'test':'workers_complete'})
         job = self.q.pop()
-        self.assertEqual(self.client.workers(), [{
-            'name'   : self.q.worker,
+        self.assertEqual(self.client.workers.all(), [{
+            'name'   : self.q.worker_name,
             'jobs'   : 1,
             'stalled': 0
         }])
-        self.assertEqual(self.client.workers(self.q.worker), {
+        self.assertEqual(self.client.workers[self.q.worker_name], {
             'jobs'   : [jid],
             'stalled': []
         })
         # Now complete it
         job.complete()
-        self.assertEqual(self.client.workers(), [{
-            'name'   : self.q.worker,
+        self.assertEqual(self.client.workers.all(), [{
+            'name'   : self.q.worker_name,
             'jobs'   : 0,
             'stalled': 0
         }])
-        self.assertEqual(self.client.workers(self.q.worker), {
+        self.assertEqual(self.client.workers[self.q.worker_name], {
             'jobs'   : [],
             'stalled': []
         })
@@ -1523,22 +1523,22 @@ class TestEverything(TestQless):
         #   3) Move job, check 'workers', 'worker'
         jid = self.q.put(qless.Job, {'test':'workers_reput'})
         job = self.q.pop()
-        self.assertEqual(self.client.workers(), [{
-            'name'   : self.q.worker,
+        self.assertEqual(self.client.workers.all(), [{
+            'name'   : self.q.worker_name,
             'jobs'   : 1,
             'stalled': 0
         }])
-        self.assertEqual(self.client.workers(self.q.worker), {
+        self.assertEqual(self.client.workers[self.q.worker_name], {
             'jobs'   : [jid],
             'stalled': []
         })
         job.move('other')
-        self.assertEqual(self.client.workers(), [{
-            'name'   : self.q.worker,
+        self.assertEqual(self.client.workers.all(), [{
+            'name'   : self.q.worker_name,
             'jobs'   : 0,
             'stalled': 0
         }])
-        self.assertEqual(self.client.workers(self.q.worker), {
+        self.assertEqual(self.client.workers[self.q.worker_name], {
             'jobs'   : [],
             'stalled': []
         })

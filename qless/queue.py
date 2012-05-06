@@ -24,11 +24,11 @@ class Jobs(object):
 
 # The Queue class
 class Queue(object):
-    def __init__(self, name, client, worker):
-        self.name    = name
-        self.client  = client
-        self.worker  = worker
-        self._hb     = 60
+    def __init__(self, name, client, worker_name):
+        self.name        = name
+        self.client      = client
+        self.worker_name = worker_name
+        self._hb         = 60
     
     def __getattr__(self, key):
         if key == 'jobs':
@@ -73,7 +73,7 @@ class Queue(object):
         Passing in the queue from which to pull items, the current time, when the locks
         for these returned items should expire, and the number of items to be popped
         off.'''
-        results = [Job(self.client, **json.loads(j)) for j in self.client._pop([self.name], [self.worker, count or 1, repr(time.time())])]
+        results = [Job(self.client, **json.loads(j)) for j in self.client._pop([self.name], [self.worker_name, count or 1, repr(time.time())])]
         if count == None:
             return (len(results) and results[0]) or None
         return results

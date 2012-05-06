@@ -51,18 +51,32 @@ class Jobs(object):
             return None
         return Job(self.client, **json.loads(results))
 
+class Workers(object):
+    def __init__(self, client):
+        self.client = client
+    
+    def all(self):
+        return json.loads(self.client._workers([], [time.time()]))
+    
+    def __getitem__(self, worker_name):
+        result = json.loads(self.client._workers([], [time.time(), worker_name]))
+        result['jobs']    = result['jobs'] or []
+        result['stalled'] = result['stalled'] or []
+        return result
+
 class client(object):
     def __init__(self, host='localhost', port=6379, hostname = None, **kwargs):
         import os
         import socket
         # This is our unique idenitifier as a worker
-        self.worker = hostname or socket.gethostname()
+        self.worker_name = hostname or socket.gethostname()
         # This is just the redis instance we're connected to
         # conceivably someone might want to work with multiple
         # instances simultaneously.
-        self.redis  = redis.Redis(host, port, **kwargs)
-        self.config = Config(self)
-        self.jobs   = Jobs(self)
+        self.redis   = redis.Redis(host, port, **kwargs)
+        self.config  = Config(self)
+        self.jobs    = Jobs(self)
+        self.workers = Workers(self)
         # Client's lua scripts
         for cmd in [
             'cancel', 'complete', 'depends', 'fail', 'failed', 'get', 'getconfig', 'heartbeat', 'jobs', 'peek',
@@ -70,7 +84,7 @@ class client(object):
             setattr(self, '_%s' % cmd, lua(cmd, self.redis))
     
     def queue(self, name):
-        return Queue(name, self, self.worker)
+        return Queue(name, self, self.worker_name)
     
     def queues(self, queue=None):
         if queue:
@@ -79,14 +93,6 @@ class client(object):
     
     def tags(self, offset=0, count=100):
         return json.loads(self._tag([], ['top', offset, count]))
-    
-    def workers(self, worker=None):
-        if worker:
-            result = json.loads(self._workers([], [time.time(), worker]))
-            result['jobs']    = result['jobs'] or []
-            result['stalled'] = result['stalled'] or []
-            return result
-        return json.loads(self._workers([], [time.time()]))
 
 from lua import lua
 from job import Job

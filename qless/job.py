@@ -35,7 +35,7 @@ class Job(object):
     
     def __init__(self, client, **kwargs):
         self.client = client
-        for att in ['data', 'jid', 'priority', 'tags', 'worker', 'state',
+        for att in ['data', 'jid', 'priority', 'tags', 'state',
         'tracked', 'failure', 'history', 'dependents', 'dependencies']:
             object.__setattr__(self, att, kwargs[att])
         
@@ -44,6 +44,7 @@ class Job(object):
         self.queue_name = kwargs['queue']
         self.original_retries = kwargs['retries']
         self.retries_left     = kwargs['remaining']
+        self.worker_name      = kwargs['worker']
         # Because of how Lua parses JSON, empty tags comes through as {}
         self.tags         = self.tags         or []
         self.dependents   = self.dependents   or []
@@ -81,7 +82,7 @@ class Job(object):
         s  = 'qless:Job : %s\n' % self.jid
         s += '\tpriority: %i\n' % self.priority
         s += '\ttags: %s\n' % ', '.join(self.tags)
-        s += '\tworker: %s\n' % self.worker
+        s += '\tworker: %s\n' % self.worker_name
         s += '\texpires_at: %i\n' % self.expires_at
         s += '\tstate: %s\n' % self.state
         s += '\tqueue: %s\n' % self.queue_name
@@ -153,19 +154,19 @@ class Job(object):
         be considered waiting immediately.'''
         if next:
             logger.info('Advancing %s to %s from %s' % (self.jid, next, self.queue_name))
-            return self.client._complete([], [self.jid, self.client.worker, self.queue_name,
+            return self.client._complete([], [self.jid, self.client.worker_name, self.queue_name,
                 repr(time.time()), json.dumps(self.data), 'next', next, 'delay', delay or 0,
                 'depends', json.dumps(depends or [])]) or False
         else:
             logger.info('Completing %s' % self.jid)
-            return self.client._complete([], [self.jid, self.client.worker, self.queue_name,
+            return self.client._complete([], [self.jid, self.client.worker_name, self.queue_name,
                 repr(time.time()), json.dumps(self.data)]) or False
     
     def heartbeat(self):
         '''Heartbeat(0, id, worker, expiration, [data])
         -------------------------------------------
         Renew the heartbeat, if possible, and optionally update the job's user data.'''
-        self.expires_at = float(self.client._heartbeat([], [self.jid, self.client.worker, repr(time.time()), json.dumps(self.data)]) or 0)
+        self.expires_at = float(self.client._heartbeat([], [self.jid, self.client.worker_name, repr(time.time()), json.dumps(self.data)]) or 0)
         return self.expires_at
     
     def fail(self, group, message):
@@ -187,7 +188,7 @@ class Job(object):
         they are canceled or completed. __Returns__ the id of the failed job if successful,
         or `False` on failure.'''
         logger.warn('Failing %s (%s): %s' % (self.jid, group, message))
-        return self.client._fail([], [self.jid, self.client.worker, group, message, repr(time.time()), json.dumps(self.data)]) or False
+        return self.client._fail([], [self.jid, self.client.worker_name, group, message, repr(time.time()), json.dumps(self.data)]) or False
     
     def cancel(self):
         '''Cancel(0, id)
@@ -214,7 +215,7 @@ class Job(object):
         return self.client._tag([], args)
     
     def retry(self, delay=0):
-        result = self.client._retry([], [self.jid, self.queue_name, self.worker, repr(time.time()), delay])
+        result = self.client._retry([], [self.jid, self.queue_name, self.worker_name, repr(time.time()), delay])
         if result == None:
             return False
         return result
