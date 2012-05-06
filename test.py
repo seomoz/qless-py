@@ -718,6 +718,19 @@ class TestEverything(TestQless):
         self.assertEqual(job.jid, jid)
         time.unfreeze()
     
+    def test_scheduled_peek_pop_state(self):
+        # Despite the wordy test name, we want to make sure that
+        # when a job is put with a delay, that its state is 
+        # 'scheduled', when we peek it or pop it and its state is
+        # now considered valid, then it should be 'waiting'
+        time.freeze()
+        jid = self.q.put(qless.Job, {'test': 'scheduled_state'}, delay=10)
+        self.assertEqual(self.client.jobs[jid].state, 'scheduled')
+        time.advance(11)
+        self.assertEqual(self.q.peek().state, 'waiting')
+        self.assertEqual(self.client.jobs[jid].state, 'waiting')
+        time.unfreeze()
+    
     def test_put_pop_complete_history(self):
         # In this test, we want to put a job, pop it, and then 
         # verify that its history has been updated accordingly.
