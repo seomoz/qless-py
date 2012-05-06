@@ -9,7 +9,7 @@ class Jobs(object):
     def __init__(self, name, client):
         self.name   = name
         self.client = client
-        
+    
     def running(self, offset=0, count=25):
         return self.client._jobs([], ['running', repr(time.time()), self.name, offset, count])
     
@@ -34,6 +34,8 @@ class Queue(object):
         if key == 'jobs':
             self.jobs = Jobs(self.name, self.client)
             return self.jobs
+        if key == 'counts':
+            return json.loads(self.client._queues([], [time.time(), self.name]))
         raise AttributeError('qless.Queue has no attribute %s' % key)
     
     def __setattr__(self, key, value):

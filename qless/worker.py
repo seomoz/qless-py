@@ -52,7 +52,7 @@ class Worker(object):
         # If this worker is meant to be resumable, then we should find out
         # what jobs this worker was working on beforehand.
         if self.resume:
-            jids_to_resume = self.client.workers(self.client.worker)['jobs']
+            jids_to_resume = self.client.workers[self.client.worker_name]['jobs']
         else:
             jids_to_resume = []
         
@@ -137,7 +137,7 @@ class Worker(object):
     def work(self):
         # We should probably open up our own redis client
         self.client = qless.client(self.host, self.port)
-        self.queues = [self.client.queue(q) for q in self.queues]
+        self.queues = [self.client.queues[q] for q in self.queues]
         
         if not os.path.isdir(self.sandbox):
             os.makedirs(self.sandbox)

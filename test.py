@@ -46,17 +46,17 @@ class TestQless(unittest.TestCase):
         # The qless client we're using
         self.client = qless.client()
         # Our main queue
-        self.q = self.client.queue('testing')
+        self.q = self.client.queues['testing']
         
         # This represents worker 'a'
         tmp = qless.client(); tmp.worker_name = 'worker-a'
-        self.a = tmp.queue('testing')
+        self.a = tmp.queues['testing']
         # This represents worker b
         tmp = qless.client(); tmp.worker_name = 'worker-b'
-        self.b = tmp.queue('testing')
+        self.b = tmp.queues['testing']
                 
         # This is just a second queue
-        self.other = self.client.queue('other')
+        self.other = self.client.queues['other']
     
     def tearDown(self):
         self.redis.flushdb()
@@ -274,8 +274,8 @@ class TestDependencies(TestQless):
         # get access to them.
         a = self.q.put(qless.Job, {'test': 'jobs_depends'})
         b = self.q.put(qless.Job, {'test': 'jobs_depends'}, depends=[a])
-        self.assertEqual(self.client.queues()[0]['depends'], 1)
-        self.assertEqual(self.client.queues('testing')['depends'], 1)
+        self.assertEqual(self.client.queues.counts[0]['depends'], 1)
+        self.assertEqual(self.client.queues['testing'].counts['depends'], 1)
         self.assertEqual(self.q.jobs.depends(), [b])
 
 class TestRetry(TestQless):
@@ -1045,9 +1045,9 @@ class TestEverything(TestQless):
         #   3) Ensure it appears in 'queues'
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
         jid = self.q.put(qless.Job, {'test': 'complete_queues'})
-        self.assertEqual(len([q for q in self.client.queues() if q['name'] == 'other']), 0)
+        self.assertEqual(len([q for q in self.client.queues.counts if q['name'] == 'other']), 0)
         self.q.pop().complete('other')
-        self.assertEqual(len([q for q in self.client.queues() if q['name'] == 'other']), 1)
+        self.assertEqual(len([q for q in self.client.queues.counts if q['name'] == 'other']), 1)
     
     def test_job_time_expiration(self):
         # In this test, we want to make sure that we honor our job
@@ -1157,7 +1157,7 @@ class TestEverything(TestQless):
         #   4) Put, pop item, check
         #   5) Put, pop, lost item, check
         self.assertEqual(len(self.q), 0)
-        self.assertEqual(self.client.queues(), {})
+        self.assertEqual(self.client.queues.counts, {})
         # Now, let's actually add an item to a queue, but scheduled
         self.q.put(qless.Job, {'test': 'queues'}, delay=10)
         expected = {
@@ -1168,27 +1168,27 @@ class TestEverything(TestQless):
             'scheduled': 1,
             'depends': 0
         }
-        self.assertEqual(self.client.queues(), [expected])
-        self.assertEqual(self.client.queues("testing"), expected)
+        self.assertEqual(self.client.queues.counts, [expected])
+        self.assertEqual(self.client.queues["testing"].counts, expected)
         
         self.q.put(qless.Job, {'test': 'queues'})
         expected['waiting'] += 1
-        self.assertEqual(self.client.queues(), [expected])
-        self.assertEqual(self.client.queues("testing"), expected)
+        self.assertEqual(self.client.queues.counts, [expected])
+        self.assertEqual(self.client.queues["testing"].counts, expected)
         
         job = self.q.pop()
         expected['waiting'] -= 1
         expected['running'] += 1
-        self.assertEqual(self.client.queues(), [expected])
-        self.assertEqual(self.client.queues("testing"), expected)
+        self.assertEqual(self.client.queues.counts, [expected])
+        self.assertEqual(self.client.queues["testing"].counts, expected)
         
         # Now we'll have to mess up our heartbeat to make this work
         self.q.put(qless.Job, {'test': 'queues'})
         self.client.config.set('heartbeat', -10)
         job = self.q.pop()
         expected['stalled'] += 1
-        self.assertEqual(self.client.queues(), [expected])
-        self.assertEqual(self.client.queues("testing"), expected)
+        self.assertEqual(self.client.queues.counts, [expected])
+        self.assertEqual(self.client.queues["testing"].counts, expected)
     
     def test_track(self):
         # In this test, we want to make sure that tracking works as expected.

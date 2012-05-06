@@ -64,6 +64,18 @@ class Workers(object):
         result['stalled'] = result['stalled'] or []
         return result
 
+class Queues(object):
+    def __init__(self, client):
+        self.client = client
+    
+    def __getattr__(self, attr):
+        if attr == 'counts':
+            return json.loads(self.client._queues([], [time.time()]))
+        raise AttributeError('qless.Queues has no attribute %s' % attr)
+    
+    def __getitem__(self, queue_name):
+        return Queue(queue_name, self.client, self.client.worker_name)
+
 class client(object):
     def __init__(self, host='localhost', port=6379, hostname = None, **kwargs):
         import os
@@ -77,19 +89,12 @@ class client(object):
         self.config  = Config(self)
         self.jobs    = Jobs(self)
         self.workers = Workers(self)
+        self.queues  = Queues(self)
         # Client's lua scripts
         for cmd in [
             'cancel', 'complete', 'depends', 'fail', 'failed', 'get', 'getconfig', 'heartbeat', 'jobs', 'peek',
             'pop', 'priority', 'put', 'queues', 'retry', 'setconfig', 'stats', 'tag', 'track', 'workers']:
             setattr(self, '_%s' % cmd, lua(cmd, self.redis))
-    
-    def queue(self, name):
-        return Queue(name, self, self.worker_name)
-    
-    def queues(self, queue=None):
-        if queue:
-            return json.loads(self._queues([], [time.time(), queue]))
-        return json.loads(self._queues([], [time.time()]))
     
     def tags(self, offset=0, count=100):
         return json.loads(self._tag([], ['top', offset, count]))

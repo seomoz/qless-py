@@ -56,7 +56,7 @@ class Job(object):
             return self.expires_at - time.time()
         elif key == 'queue':
             # An actual queue instance
-            self.queue = self.client.queue(self.queue_name)
+            self.queue = self.client.queues[self.queue_name]
             return self.queue
         elif key == 'klass':
             # Get a reference to the provided klass
