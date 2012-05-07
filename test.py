@@ -277,6 +277,25 @@ class TestDependencies(TestQless):
         self.assertEqual(self.client.queues.counts[0]['depends'], 1)
         self.assertEqual(self.client.queues['testing'].counts['depends'], 1)
         self.assertEqual(self.q.jobs.depends(), [b])
+        
+        # When we remove a dependency, we should no longer see that job as a dependency
+        self.client.jobs[b].undepend(a)
+        self.assertEqual(self.client.queues.counts[0]['depends'], 0)
+        self.assertEqual(self.client.queues['testing'].counts['depends'], 0)
+        self.assertEqual(self.q.jobs.depends(), [])
+        
+        # When we move a job that has a dependency, we should no longer
+        # see it in the depends() of the original job
+        a = self.q.put(qless.Job, {'test': 'jobs_depends'})
+        b = self.q.put(qless.Job, {'test': 'jobs_depends'}, depends=[a])
+        self.assertEqual(self.client.queues.counts[0]['depends'], 1)
+        self.assertEqual(self.client.queues['testing'].counts['depends'], 1)
+        self.assertEqual(self.q.jobs.depends(), [b])
+        # Now, move the job
+        self.client.jobs[b].move('other')
+        self.assertEqual(self.client.queues.counts[0]['depends'], 0)
+        self.assertEqual(self.client.queues['testing'].counts['depends'], 0)
+        self.assertEqual(self.q.jobs.depends(), [])
 
 class TestRetry(TestQless):
     # It should decrement retries, and put it back in the queue. If retries
