@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 
 import os
+import qless
 from qless import worker, logger
 
 class Worker(worker.Worker):
