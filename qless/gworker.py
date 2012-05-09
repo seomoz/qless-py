@@ -9,6 +9,10 @@ class Worker(worker.Worker):
         worker.Worker.__init__(self, *args, **kwargs)
     
     def work(self):
+        # We should probably open up our own redis client
+        self.client = qless.client(self.host, self.port)
+        self.queues = [self.client.queues[q] for q in self.queues]
+        
         if not os.path.isdir(self.sandbox):
             os.makedirs(self.sandbox)
         
