@@ -28,6 +28,12 @@ class Worker(worker.Worker):
                     pool.wait_available()
                     job = queue.pop()
                     if job:
+                        # For whatever reason, doing imports within a greenlet
+                        # (there's one implicitly invoked in job.process), was
+                        # throwing exceptions. The relatively ghetto way to get
+                        # around this is to force the import to happen before
+                        # the greenlet is spawned.
+                        _module = job.klass
                         seen = True
                         pool.start(Greenlet(job.process))
                 
