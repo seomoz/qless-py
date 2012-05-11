@@ -258,11 +258,12 @@ class RecurringJob(BaseJob):
     
     def __setattr__(self, key, value):
         if key in ('priority', 'retries', 'interval'):
-            return self.client._recur([], ['update', self.jid, key, value])
+            return self.client._recur([], ['update', self.jid, key, value]) and object.__setattr__(self, key, value)
         if key == 'data':
-            return self.client._recur([], ['update', self.jid, key, json.dumps(value)])
+            return self.client._recur([], ['update', self.jid, key, json.dumps(value)]) and object.__setattr__(self, 'data', value)
         if key == 'klass':
-            return self.client._recur([], ['update', self.jid, 'klass', value.__module__ + '.' + value.__name__])
+            name = value.__module__ + '.' + value.__name__
+            return self.client._recur([], ['update', self.jid, 'klass', name]) and object.__setattr__(self, 'klass_name', name) and object.__setattr__(self, 'klass', value)
         return object.__setattr__(self, key, value)
     
     def move(self, queue):
