@@ -236,7 +236,24 @@ class TestRecurring(TestQless):
         self.assertEqual(   self.client.jobs[jid].klass     , qless.RecurringJob)
     
     def test_change_interval(self):
-        pass
+        # If we update a recurring job's interval, then we should get
+        # jobs from it as if it had been scheduled this way from the
+        # last time it had a job popped
+        time.freeze()
+        jid = self.q.recur(qless.Job, {'test':'test_change_interval'}, interval=100)
+        time.advance(100)
+        self.assertEqual(self.q.pop().complete(), 'complete')
+        time.advance(50)
+        # Now, let's update the interval to make it more frequent
+        self.client.jobs[jid].interval = 10
+        jobs = self.q.pop(100)
+        self.assertEqual(len(jobs), 5)
+        results = [job.complete() for job in jobs]
+        # Now let's make the interval much longer
+        time.advance(49) ; self.client.jobs[jid].interval = 1000; self.assertEqual(self.q.pop(), None)
+        time.advance(100); self.client.jobs[jid].interval = 1000; self.assertEqual(self.q.pop(), None)
+        time.advance(849); self.client.jobs[jid].interval = 1000; self.assertEqual(self.q.pop(), None)
+        time.advance(1)  ; self.client.jobs[jid].interval = 1000; self.assertEqual(self.q.pop(), None)
     
     def test_move(self):
         # If we move a recurring job from one queue to another, then
@@ -257,7 +274,21 @@ class TestRecurring(TestQless):
     def test_change_tags(self):
         # We should be able to add and remove tags from a recurring job,
         # and see the impact in all the jobs it subsequently spawns
-        pass
+        time.freeze()
+        jid = self.q.recur(qless.Job, {'test':'test_change_tags'}, tags = ['foo', 'bar'], interval = 1)
+        time.advance(1)
+        self.assertEqual(self.q.pop().tags, ['foo', 'bar'])
+        # Now let's untag the job
+        self.client.jobs[jid].untag('foo')
+        self.assertEqual(self.client.jobs[jid].tags, ['bar'])
+        time.advance(1)
+        self.assertEqual(self.q.pop().tags, ['bar'])
+        
+        # Now let's add 'foo' back in, and also add 'hey'
+        self.client.jobs[jid].tag('foo', 'hey')
+        self.assertEqual(self.client.jobs[jid].tags, ['bar', 'foo', 'hey'])
+        time.advance(1)
+        self.assertEqual(self.q.pop().tags, ['bar', 'foo', 'hey'])
     
     def test_peek(self):
         # When we peek at jobs in a queue, it should take recurring jobs
@@ -2000,6 +2031,38 @@ class TestEverything(TestQless):
         self.assertRaises(Exception, queues, *([], []))
         # Malformed time
         self.assertRaises(Exception, queues, *([], ['howdy']))
+    
+    def test_lua_queues(self):
+        recur = qless.lua('recur', self.redis)
+        # Passing in keys
+        self.assertRaises(Exception, recur, *(['foo'], [12345]))
+        # Missing command, queue, jid, klass, data, now, 'interval', interval, offset
+        self.assertRaises(Exception, recur, *([], []))
+        self.assertRaises(Exception, recur, *([], ['on']))
+        self.assertRaises(Exception, recur, *([], ['on', 'testing']))
+        self.assertRaises(Exception, recur, *([], ['on', 'testing', 12345]))
+        self.assertRaises(Exception, recur, *([], ['on', 'testing', 12345, 'foo.klass']))
+        self.assertRaises(Exception, recur, *([], ['on', 'testing', 12345, 'foo.klass', '{}']))
+        self.assertRaises(Exception, recur, *([], ['on', 'testing', 12345, 'foo.klass', '{}', 12345]))
+        self.assertRaises(Exception, recur, *([], ['on', 'testing', 12345, 'foo.klass', '{}', 12345, 'interval']))
+        self.assertRaises(Exception, recur, *([], ['on', 'testing', 12345, 'foo.klass', '{}', 12345, 'interval', 12345]))
+        self.assertRaises(Exception, recur, *([], ['on', 'testing', 12345, 'foo.klass', '{}', 12345, 'interval', 12345, 0]))
+        # Malformed data, priority, tags, retries
+        self.assertRaises(Exception, recur, *([], ['on', 'testing', 12345, 'foo.klass', '[}', 12345, 'interval', 12345, 0]))
+        self.assertRaises(Exception, recur, *([], ['on', 'testing', 12345, 'foo.klass', '{}', 12345, 'interval', 12345, 0, 'priority', 'foo']))
+        self.assertRaises(Exception, recur, *([], ['on', 'testing', 12345, 'foo.klass', '{}', 12345, 'interval', 12345, 0, 'retries', 'foo']))
+        self.assertRaises(Exception, recur, *([], ['on', 'testing', 12345, 'foo.klass', '{}', 12345, 'interval', 12345, 0, 'tags', '[}']))
+        # Missing jid
+        self.assertRaises(Exception, recur, *([], ['off']))
+        self.assertRaises(Exception, recur, *([], ['get']))
+        self.assertRaises(Exception, recur, *([], ['update']))
+        self.assertRaises(Exception, recur, *([], ['tag']))
+        self.assertRaises(Exception, recur, *([], ['untag']))
+        # Malformed priority, interval, retries, data
+        self.assertRaises(Exception, recur, *([], ['update', 12345, 'priority', 'foo']))
+        self.assertRaises(Exception, recur, *([], ['update', 12345, 'interval', 'foo']))
+        self.assertRaises(Exception, recur, *([], ['update', 12345, 'retries', 'foo']))
+        self.assertRaises(Exception, recur, *([], ['update', 12345, 'data', '[}']))
     
     def test_lua_retry(self):
         retry = qless.lua('retry', self.redis)

@@ -257,7 +257,7 @@ class RecurringJob(BaseJob):
         object.__setattr__(self, 'tags'      , self.tags or [])
     
     def __setattr__(self, key, value):
-        if key in ('priority', 'retries', 'priority'):
+        if key in ('priority', 'retries', 'interval'):
             return self.client._recur([], ['update', self.jid, key, value])
         if key == 'data':
             return self.client._recur([], ['update', self.jid, key, json.dumps(value)])
@@ -272,8 +272,8 @@ class RecurringJob(BaseJob):
         self.client._recur([], ['off', self.jid])
     
     def tag(self, *tags):
-        return self.client._recur([], ['tag', self.jid] + tags)
+        return self.client._recur([], ['tag', self.jid] + list(tags))
     
     def untag(self, *tags):
-        return self.client._recur([], ['tag', self.jid] + tags)
+        return self.client._recur([], ['untag', self.jid] + list(tags))
     
