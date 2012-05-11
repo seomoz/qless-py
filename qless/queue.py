@@ -21,6 +21,9 @@ class Jobs(object):
     
     def depends(self, offset=0, count=25):
         return self.client._jobs([], ['depends', repr(time.time()), self.name, offset, count])
+    
+    def recurring(self, offset=0, count=25):
+        return self.client._jobs([], ['recurring', repr(time.time()), self.name, offset, count])
 
 # The Queue class
 class Queue(object):
@@ -67,6 +70,21 @@ class Queue(object):
             'tags', json.dumps(tags or []),
             'retries', retries or 5,
             'depends', json.dumps(depends or [])
+        ])
+    
+    def recur(self, klass, data, interval, offset=0, priority=None, tags=None, retries=None, jid=None):
+        # -- Recur(0, 'on', queue, jid, klass, data, now, 'interval', second, offset, [priority p], [tags t], [retries r])
+        # -- Recur(0, 'off', jid)
+        # -- Recur(0, 'get', jid)
+        return self.client._recur([], ['on', self.name,
+            jid or uuid.uuid4().hex,
+            klass.__module__ + '.' + klass.__name__,
+            json.dumps(data),
+            repr(time.time()),
+            'interval', interval, offset,
+            'priority', priority or 0,
+            'tags', json.dumps(tags or []),
+            'retries', retries or 5
         ])
     
     def pop(self, count=None):

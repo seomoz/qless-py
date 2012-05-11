@@ -9,12 +9,21 @@ import traceback
 from qless import logger
 import simplejson as json
 
-# The Job class
-class Job(object):
-    # This is a dictionary of all the classes that we've seen, and
-    # the last load time for each of them. We'll use this either for
-    # the debug mode or the general mechanism
-    _loaded = {}
+class BaseJob(object):
+    def __init__(self, client, jid):
+        self.client = client
+        self.jid    = jid
+    
+    def __getattr__(self, key):
+        if key == 'queue':
+            # An actual queue instance
+            object.__setattr__(self, 'queue', self.client.queues[self.queue_name])
+            return self.queue
+        elif key == 'klass':
+            # Get a reference to the provided klass
+            object.__setattr__(self, 'klass', self._import(self.klass_name))
+            return self.klass
+        raise AttributeError('%s has no attribute %s' % (self.__class__.__module__ + '.' + self.__class__.__name__, key))
     
     @staticmethod
     def _import(klass):
@@ -33,6 +42,23 @@ class Job(object):
         
         return getattr(mod, klass.rpartition('.')[2])
     
+    def tag(self, *tags):
+        args = ['add', self.jid, repr(time.time())]
+        args.extend(tags)
+        return self.client._tag([], args)
+    
+    def untag(self, *tags):
+        args = ['remove', self.jid, repr(time.time())]
+        args.extend(tags)
+        return self.client._tag([], args)
+
+# The Job class
+class Job(BaseJob):
+    # This is a dictionary of all the classes that we've seen, and
+    # the last load time for each of them. We'll use this either for
+    # the debug mode or the general mechanism
+    _loaded = {}
+        
     def __init__(self, client, **kwargs):
         self.client = client
         for att in ['data', 'jid', 'priority', 'tags', 'state',
@@ -50,26 +76,18 @@ class Job(object):
         self.dependents   = self.dependents   or []
         self.dependencies = self.dependencies or []
     
-    def __getattr__(self, key):
-        if key == 'ttl':
-            # How long until this expires, in seconds
-            return self.expires_at - time.time()
-        elif key == 'queue':
-            # An actual queue instance
-            self.queue = self.client.queues[self.queue_name]
-            return self.queue
-        elif key == 'klass':
-            # Get a reference to the provided klass
-            self.klass = self._import(self.klass_name)
-            return self.klass
-        raise AttributeError('qless.Job has no attribute %s' % key)
-    
     def __setattr__(self, key, value):
         if key == 'priority':
             if self.client._priority([], [self.jid, value]) != None:
                 object.__setattr__(self, key, value)
         else:
             object.__setattr__(self, key, value)
+    
+    def __getattr__(self, key):
+        if key == 'ttl':
+            # How long until this expires, in seconds
+            return self.expires_at - time.time()
+        return BaseJob.__getattr__(self, key)
     
     def __getitem__(self, key):
         return self.data.get(key)
@@ -204,16 +222,6 @@ class Job(object):
     def untrack(self):
         return self.client._track([], ['untrack', self.jid, repr(time.time())])
     
-    def tag(self, *tags):
-        args = ['add', self.jid, repr(time.time())]
-        args.extend(tags)
-        return self.client._tag([], args)
-    
-    def untag(self, *tags):
-        args = ['remove', self.jid, repr(time.time())]
-        args.extend(tags)
-        return self.client._tag([], args)
-    
     def retry(self, delay=0):
         result = self.client._retry([], [self.jid, self.queue_name, self.worker_name, repr(time.time()), delay])
         if result == None:
@@ -237,3 +245,35 @@ class Job(object):
             return self.client._depends([], [self.jid, 'off', 'all']) or False
         else:
             return self.client._depends([], [self.jid, 'off'] + list(args)) or False
+
+class RecurringJob(BaseJob):
+    def __init__(self, client, **kwargs):
+        for att in ['data', 'jid', 'priority', 'tags', 'retries', 'interval', 'count']:
+            object.__setattr__(self, att, kwargs[att])
+        
+        object.__setattr__(self, 'client'    , client         )
+        object.__setattr__(self, 'klass_name', kwargs['klass'])
+        object.__setattr__(self, 'queue_name', kwargs['queue'])
+        object.__setattr__(self, 'tags'      , self.tags or [])
+    
+    def __setattr__(self, key, value):
+        if key in ('priority', 'retries', 'priority'):
+            return self.client._recur([], ['update', self.jid, key, value])
+        if key == 'data':
+            return self.client._recur([], ['update', self.jid, key, json.dumps(value)])
+        if key == 'klass':
+            return self.client._recur([], ['update', self.jid, 'klass', value.__module__ + '.' + value.__name__])
+        return object.__setattr__(self, key, value)
+    
+    def move(self, queue):
+        return self.client._recur([], ['update', self.jid, 'queue', queue])
+    
+    def cancel(self):
+        self.client._recur([], ['off', self.jid])
+    
+    def tag(self, *tags):
+        return self.client._recur([], ['tag', self.jid] + tags)
+    
+    def untag(self, *tags):
+        return self.client._recur([], ['tag', self.jid] + tags)
+    

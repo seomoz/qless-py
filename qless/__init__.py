@@ -48,7 +48,10 @@ class Jobs(object):
         Get the data associated with a job'''
         results = self.client._get([], [id])
         if not results:
-            return None
+            results = self.client._recur([], ['get', id])
+            if not results:
+                return None
+            return RecurringJob(self.client, **json.loads(results))
         return Job(self.client, **json.loads(results))
 
 class Workers(object):
@@ -93,13 +96,13 @@ class client(object):
         # Client's lua scripts
         for cmd in [
             'cancel', 'complete', 'depends', 'fail', 'failed', 'get', 'getconfig', 'heartbeat', 'jobs', 'peek',
-            'pop', 'priority', 'put', 'queues', 'retry', 'setconfig', 'stats', 'tag', 'track', 'workers']:
+            'pop', 'priority', 'put', 'queues', 'recur', 'retry', 'setconfig', 'stats', 'tag', 'track', 'workers']:
             setattr(self, '_%s' % cmd, lua(cmd, self.redis))
     
     def tags(self, offset=0, count=100):
         return json.loads(self._tag([], ['top', offset, count]))
 
 from lua import lua
-from job import Job
+from job import Job, RecurringJob
 from queue import Queue
 from config import Config

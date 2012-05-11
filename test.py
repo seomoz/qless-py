@@ -62,6 +62,212 @@ class TestQless(unittest.TestCase):
         self.redis.flushdb()
         time.unfreeze()
 
+class TestRecurring(TestQless):
+    def test_recur_on(self):
+        # In this test, we want to enqueue a job and make sure that
+        # we can get some jobs from it in the most basic way. We should
+        # get jobs out of the queue every _k_ seconds
+        time.freeze()
+        self.q.recur(qless.Job, {'test':'test_recur_on'}, interval=1800)
+        self.assertEqual(self.q.pop(), None)
+        time.advance(1799)
+        self.assertEqual(self.q.pop(), None)
+        time.advance(2)
+        job = self.q.pop()
+        self.assertNotEqual(job, None)
+        self.assertEqual(job.data, {'test':'test_recur_on'})
+        job.complete()
+        # We should not be able to pop a second job
+        self.assertEqual(self.q.pop(), None)
+        # Let's advance almost to the next one, and then check again
+        time.advance(1798)
+        self.assertEqual(self.q.pop(), None)
+        time.advance(2)
+        self.assertNotEqual(self.q.pop(), None)
+        time.unfreeze()
+    
+    def test_recur_attributes(self):
+        # Popped jobs should have the same priority, tags, etc. that the
+        # recurring job has
+        time.freeze()
+        self.q.recur(qless.Job, {'test':'test_recur_attributes'}, interval=100, priority=-10, tags=['foo', 'bar'], retries=2)
+        for i in range(10):
+            time.advance(100)
+            job = self.q.pop()
+            self.assertNotEqual(job, None)
+            self.assertEqual(job.priority, -10)
+            self.assertEqual(job.tags, ['foo', 'bar'])
+            self.assertEqual(job.original_retries, 2)
+            self.assertIn(   job.jid, self.client.jobs.tagged('foo')['jobs'])
+            self.assertIn(   job.jid, self.client.jobs.tagged('bar')['jobs'])
+            self.assertNotIn(job.jid, self.client.jobs.tagged('hey')['jobs'])
+            job.complete()
+            self.assertEqual(self.q.pop(), None)
+        time.unfreeze()
+    
+    def test_recur_offset(self):
+        # In this test, we should get a job after offset and interval
+        # have passed
+        time.freeze()
+        self.q.recur(qless.Job, {'test':'test_recur_offset'}, interval=100, offset=50)
+        self.assertEqual(self.q.pop(), None)
+        time.advance(100)
+        self.assertEqual(self.q.pop(), None)
+        time.advance(50)
+        job = self.q.pop()
+        self.assertNotEqual(job, None)
+        job.complete()
+        # And henceforth we should have jobs periodically at 100 seconds
+        time.advance(99)
+        self.assertEqual(self.q.pop(), None)
+        time.advance(2)
+        self.assertNotEqual(self.q.pop(), None)
+    
+    def test_recur_off(self):
+        # In this test, we want to make sure that we can stop recurring
+        # jobs
+        # We should see these recurring jobs crop up under queues when 
+        # we request them
+        time.freeze()
+        jid = self.q.recur(qless.Job, {'test':'test_recur_off'}, interval=100)
+        self.assertEqual(self.client.queues['testing'].counts['recurring'], 1)
+        self.assertEqual(self.client.queues.counts[0]['recurring'], 1)
+        # Now, let's pop off a job, and then cancel the thing
+        time.advance(110)
+        self.assertEqual(self.q.pop().complete(), 'complete')
+        job = self.client.jobs[jid]
+        self.assertEqual(job.__class__, qless.RecurringJob)
+        job.cancel()
+        self.assertEqual(self.client.queues['testing'].counts['recurring'], 0)
+        self.assertEqual(self.client.queues.counts[0]['recurring'], 0)
+        time.advance(1000)
+        self.assertEqual(self.q.pop(), None)
+    
+    def test_jobs_recur(self):
+        # We should be able to list the jids of all the recurring jobs
+        # in a queue
+        jids = [self.q.recur(qless.Job, {'test':'test_jobs_recur'}, interval=i * 10) for i in range(10)]
+        self.assertEqual(self.q.jobs.recurring(), jids)
+        for jid in jids:
+            self.assertEqual(self.client.jobs[jid].__class__, qless.RecurringJob)
+    
+    def test_recur_get(self):
+        # We should be able to get the data for a recurring job
+        time.freeze()
+        jid = self.q.recur(qless.Job, {'test':'test_recur_get'}, interval=100, priority=-10, tags=['foo', 'bar'], retries=2)
+        job = self.client.jobs[jid]
+        self.assertEqual(job.__class__ , qless.RecurringJob)
+        self.assertEqual(job.priority  , -10)
+        self.assertEqual(job.queue_name, 'testing')
+        self.assertEqual(job.data      , {'test':'test_recur_get'})
+        self.assertEqual(job.tags      , ['foo', 'bar'])
+        self.assertEqual(job.interval  , 100)
+        self.assertEqual(job.retries   , 2)
+        self.assertEqual(job.count     , 0)
+        self.assertEqual(job.klass_name, 'qless.job.Job')
+        
+        # Now let's pop a job
+        time.advance(110)
+        self.q.pop()
+        self.assertEqual(self.client.jobs[jid].count, 1)
+    
+    def test_passed_interval(self):
+        # We should get multiple jobs if we've passed the interval time
+        # several times.
+        time.freeze()
+        jid = self.q.recur(qless.Job, {'test':'test_passed_interval'}, interval=100)
+        time.advance(850)
+        self.assertEqual(len(self.q.pop(100)), 8)
+    
+    def test_queues_endpoint(self):
+        # We should see these recurring jobs crop up under queues when 
+        # we request them
+        jid = self.q.recur(qless.Job, {'test':'test_queues_endpoint'}, interval=100)
+        self.assertEqual(self.client.queues['testing'].counts['recurring'], 1)
+        self.assertEqual(self.client.queues.counts[0]['recurring'], 1)
+    
+    def test_change_attributes(self):
+        # We should be able to change the attributes of a recurring job,
+        # and future spawned jobs should be affected appropriately. In
+        # addition, when we change the interval, the effect should be 
+        # immediate (evaluated from the last time it was run)
+        time.freeze()
+        jid = self.q.recur(qless.Job, {'test':'test_change_attributes'}, interval=1)
+        job = self.client.jobs[jid]
+        
+        # First, test priority
+        time.advance(1)
+        self.assertNotEqual(self.q.pop().priority         , -10)
+        self.assertNotEqual(self.client.jobs[jid].priority, -10)
+        job.priority = -10
+        time.advance(1)
+        self.assertEqual(   self.q.pop().priority         , -10)
+        self.assertEqual(   self.client.jobs[jid].priority, -10)
+        
+        # And data
+        time.advance(1)
+        self.assertNotEqual(self.q.pop().data             , {'foo': 'bar'})
+        self.assertNotEqual(self.client.jobs[jid].data    , {'foo': 'bar'})
+        job.data     = {'foo': 'bar'}
+        time.advance(1)
+        self.assertEqual(   self.q.pop().data             , {'foo': 'bar'})
+        self.assertEqual(   self.client.jobs[jid].data    , {'foo': 'bar'})
+        
+        # And retries
+        time.advance(1)
+        self.assertNotEqual(self.q.pop().original_retries , 10)
+        self.assertNotEqual(self.client.jobs[jid].retries , 10)
+        job.retries  = 10
+        time.advance(1)
+        self.assertEqual(   self.q.pop().original_retries , 10)
+        self.assertEqual(   self.client.jobs[jid].retries , 10)
+        
+        # And klass
+        time.advance(1)
+        self.assertNotEqual(self.q.peek().klass_name        , 'qless.job.RecurringJob')
+        self.assertNotEqual(self.q.pop().klass              , qless.RecurringJob)
+        self.assertNotEqual(self.client.jobs[jid].klass_name, 'qless.job.RecurringJob')
+        self.assertNotEqual(self.client.jobs[jid].klass     , qless.RecurringJob)
+        job.klass    = qless.RecurringJob
+        time.advance(1)
+        self.assertEqual(   self.q.peek().klass_name        , 'qless.job.RecurringJob')
+        self.assertEqual(   self.q.pop().klass              , qless.RecurringJob)
+        self.assertEqual(   self.client.jobs[jid].klass_name, 'qless.job.RecurringJob')
+        self.assertEqual(   self.client.jobs[jid].klass     , qless.RecurringJob)
+    
+    def test_change_interval(self):
+        pass
+    
+    def test_move(self):
+        # If we move a recurring job from one queue to another, then
+        # all future spawned jobs should be popped from that queue
+        time.freeze()
+        jid = self.q.recur(qless.Job, {'test':'test_move'}, interval = 100)
+        time.advance(110)
+        self.assertEqual(self.q.pop().complete(), 'complete')
+        self.assertEqual(self.other.pop(), None)
+        # Now let's move it to another queue
+        self.client.jobs[jid].move('other')
+        self.assertEqual(self.q.pop()    , None)
+        self.assertEqual(self.other.pop(), None)
+        time.advance(100)
+        self.assertEqual(self.q.pop()    , None)
+        self.assertEqual(self.other.pop().complete(), 'complete')
+    
+    def test_change_tags(self):
+        # We should be able to add and remove tags from a recurring job,
+        # and see the impact in all the jobs it subsequently spawns
+        pass
+    
+    def test_peek(self):
+        # When we peek at jobs in a queue, it should take recurring jobs
+        # into account
+        time.freeze()
+        jid = self.q.recur(qless.Job, {'test':'test_peek'}, interval = 100)
+        self.assertEqual(self.q.peek(), None)
+        time.advance(110)
+        self.assertNotEqual(self.q.peek(), None)
+
 class TestDependencies(TestQless):
     def test_depends_put(self):
         # In this test, we want to put a job, and put a second job
@@ -1198,7 +1404,8 @@ class TestEverything(TestQless):
             'waiting': 0,
             'running': 0,
             'scheduled': 1,
-            'depends': 0
+            'depends': 0,
+            'recurring': 0
         }
         self.assertEqual(self.client.queues.counts, [expected])
         self.assertEqual(self.client.queues["testing"].counts, expected)
