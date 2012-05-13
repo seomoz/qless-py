@@ -12,6 +12,7 @@ queue, based on Redis, and inspired by Resque, but with several key differences:
 1. __Scheduling__ -- qless supports scheduling jobs right out of the box
 1. __Dependendies__ -- jobs can wait for another job(s) to complete before being 
 	worked on
+1. __Recurring Jobs__ -- jobs can be set to recur periodically
 1. __History__ -- each job knows everything that's happend to it. From when it was
 	first enqueued, to when it was popped, failed, and completed
 1. __Priority__ -- jobs aren't restricted to priorities of 'high', 'medium' and 'low',
@@ -41,7 +42,6 @@ the qless-core submodule:
 
 Business Time!
 ==============
-
 You've read this far -- you probably want to write some code now and turn them into jobs.
 Jobs are described essentially by two pieces of information -- a `class` and `data`.
 The class should have static methods that know how to process this type of job depending
@@ -217,7 +217,7 @@ While in many cases the above is sufficient, there are also many cases where you
 something more. Hopefully after this section many of your questions will be answered.
 
 Priority
-========
+--------
 Jobs can optionally have priority associated with them. Jobs of equal priority are popped
 in the order in which they were put in a queue. The lower the priority, the sooner it will
 be processed (it's sort of like `nice`ness). If, for example, you get a new job to collect
@@ -226,7 +226,7 @@ some really valuable underpants, then:
 	queue.put(qless.gnomes.GnomesJob, {'address': '123 Brief St.'}, priority = -100)
 
 Tags
-====
+----
 Jobs can have string tags associated with them. Currently, they're justs a piece of metadata
 that's associated with each job, but in the future, these will likely be indexed for quick
 access.
@@ -234,7 +234,7 @@ access.
 	queue.put(qless.gnomes.GnomesJob, {}, tags=['tidy', 'white', 'briefs'])
 
 Delay
-=====
+-----
 Jobs can also be scheduled for the future with a delay (in seconds). If for example, you just
 learned of an underpants heist opportunity, but you have to wait until later:
 
@@ -246,9 +246,36 @@ be subject to the normal constraints. If you want it to be processed very soon a
 expires, you could also boost its priority:
 
 	queue.put(qless.gnomes.GnomesJob, {}, delay=3600, priority=-1000)
+	
+Job Dependencies
+----------------
+Jobs can be made dependent on the completion of another job. For example, if you
+need to buy eggs, and buy a pan before making an omelete, you could say:
+
+	eggs_jid = client.queues['buy_eggs'].put(myJob, {'count': 12})
+	pan_jid  = client.queues['buy_pan' ].put(myJob, {'coating': 'non-stick'})
+	client.queues['omelete'].put(myJob, {'toppings': ['onions', 'ham']}, depends=[eggs_jid, pan_jid])
+
+That way, the job to make the omelete can't be performed until the pan and eggs
+purchases have been completed.
+
+Recurring Jobs
+--------------
+Whether it's nightly maintainence, or weekly customer updates, you can have a
+job of a certain configuration set to recur. Recurring jobs still support priority,
+and tagging, and are attached to a queue. Let's say, for example, I need some
+global maintenance to run, and I don't care what machine runs it, so long as
+someone does:
+
+	client.queues['maintenance'].recur(myJob, {'tasks': ['sweep', 'mop', 'scrub']}, interval=60 * 60 * 24)
+
+That will spawn a job right now, but it's possible you'd like to have it recur,
+but maybe the first job should wait a little bit:
+
+	client.queues['maintenance'].recur(..., interval=86400, offset=3600)
 
 Retries
-=======
+-------
 Workers sometimes die. That's an unfortunate reality of life. We try to mitigate the effects of
 this by insisting that workers heartbeat their jobs to ensure that they do not get dropped. That
 said, qless will automatically requeue jobs that do get 'stalled' up to the provided number of
@@ -258,7 +285,7 @@ a particular heist several times:
 	queue.put(qless.gnomes.GnomesJob, {}, retries=10)
 
 Pop
-===
+---
 A client pops one or more jobs from a queue:
 
 	# Get a single job
@@ -267,7 +294,7 @@ A client pops one or more jobs from a queue:
 	jobs = queue.pop(20)
 
 Heartbeating
-============
+------------
 Each job object has a notion of when you must either check in with a heartbeat or
 turn it in as completed. You can get the absolute time until it expires, or how 
 long you have left:
@@ -289,7 +316,7 @@ you are done, you should complete it so that the job can move on:
 	job.complete('anotherQueue')
 
 Stats
-=====
+-----
 One of the selling points of qless is that it keeps stats for you about your 
 underpants hijinks. It tracks the average wait time, number of jobs that have
 waited in a queue, failures, retries, and average running time. It also keeps

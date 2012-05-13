@@ -19,22 +19,23 @@ class Jobs(object):
         self.client = client
     
     def complete(self, offset=0, count=25):
+        '''Return the paginated jids of complete jobs'''
         return self.client._jobs([], ['complete', offset, count])
     
     def tracked(self):
+        '''Return an array of job objects that are being tracked'''
         results = json.loads(self.client._track([], []))
         results['jobs'] = [Job(self, **j) for j in results['jobs']]
         return results
     
     def tagged(self, tag, offset=0, count=25):
+        '''Return the paginated jids of jobs tagged with a tag'''
         return json.loads(self.client._tag([], ['get', tag, offset, count]))
     
     def failed(self, group=None, start=0, limit=25):
-        '''Failed(0, [group, [start, [limit]]])
-        ---------------------------------------
-        If no type is provided, this returns a JSON blob of the counts of the various
-        types of failures known. If a type is provided, it will report up to `limit`
-        from `start` of the jobs affected by that issue. __Returns__ a JSON blob.'''
+        '''If no group is provided, this returns a JSON blob of the counts of the various
+        types of failures known. If a type is provided, returns paginated job objects 
+        affected by that kind of failure.'''
         if not group:
             return json.loads(self.client._failed([], []))
         else:
@@ -43,9 +44,7 @@ class Jobs(object):
             return results
     
     def __getitem__(self, id):
-        '''Get(0, id)
-        ----------
-        Get the data associated with a job'''
+        '''Get a job object corresponding to that jid, or ``None`` if it doesn't exist'''
         results = self.client._get([], [id])
         if not results:
             results = self.client._recur([], ['get', id])
@@ -58,10 +57,14 @@ class Workers(object):
     def __init__(self, client):
         self.client = client
     
-    def all(self):
-        return json.loads(self.client._workers([], [time.time()]))
+    def __getattr__(self, attr):
+        '''What workers are workers, and how many jobs are they running'''
+        if attr == 'counts':
+            return json.loads(self.client._workers([], [time.time()]))
+        raise AttributeError('qless.Workers has no attribute %s' % attr)
     
     def __getitem__(self, worker_name):
+        '''Which jobs does a particular worker have running'''
         result = json.loads(self.client._workers([], [time.time(), worker_name]))
         result['jobs']    = result['jobs'] or []
         result['stalled'] = result['stalled'] or []
@@ -72,11 +75,14 @@ class Queues(object):
         self.client = client
     
     def __getattr__(self, attr):
+        '''What queues are there, and how many jobs do they have running, waiting, 
+        scheduled, etc.'''
         if attr == 'counts':
             return json.loads(self.client._queues([], [time.time()]))
         raise AttributeError('qless.Queues has no attribute %s' % attr)
     
     def __getitem__(self, queue_name):
+        '''Get a queue object associated with the provided queue name'''
         return Queue(queue_name, self.client, self.client.worker_name)
 
 class client(object):
@@ -100,6 +106,7 @@ class client(object):
             setattr(self, '_%s' % cmd, lua(cmd, self.redis))
     
     def tags(self, offset=0, count=100):
+        '''The most common tags among jobs'''
         return json.loads(self._tag([], ['top', offset, count]))
 
 from lua import lua

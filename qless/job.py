@@ -10,9 +10,26 @@ from qless import logger
 import simplejson as json
 
 class BaseJob(object):
-    def __init__(self, client, jid):
+    # This is a dictionary of all the classes that we've seen, and
+    # the last load time for each of them. We'll use this either for
+    # the debug mode or the general mechanism
+    _loaded = {}
+    
+    def __init__(self, client, **kwargs):
         self.client = client
-        self.jid    = jid
+        for att in ['data', 'jid', 'priority']:
+            object.__setattr__(self, att, kwargs[att])
+        
+        object.__setattr__(self, 'klass_name', kwargs['klass'])
+        object.__setattr__(self, 'queue_name', kwargs['queue'])
+        # Because of how Lua parses JSON, empty tags comes through as {}
+        object.__setattr__(self, 'tags'      , kwargs['tags'] or [])
+    
+    def __setattr__(self, key, value):
+        if key == 'priority':
+            return self.client._priority([], [self.jid, value]) and object.__setattr__(self, key, value)
+        else:
+            return object.__setattr__(self, key, value)
     
     def __getattr__(self, key):
         if key == 'queue':
@@ -36,52 +53,43 @@ class BaseJob(object):
         
         # Alright, now check the file associated with it
         mtime = os.stat(mod.__file__).st_mtime
-        Job._loaded[klass] = min(Job._loaded.get(klass, 1e20), time.time())
-        if Job._loaded[klass] < mtime:
+        BaseJob._loaded[klass] = min(BaseJob._loaded.get(klass, 1e20), time.time())
+        if BaseJob._loaded[klass] < mtime:
             mod = reload(mod)
         
         return getattr(mod, klass.rpartition('.')[2])
     
+    def cancel(self):
+        '''Cancel a job. It will be deleted from the system, the thinking being that
+        if you don't want to do any work on it, it shouldn't be in the queueing system.'''
+        return self.client._cancel([], [self.jid])
+    
     def tag(self, *tags):
-        args = ['add', self.jid, repr(time.time())]
-        args.extend(tags)
-        return self.client._tag([], args)
+        '''Tag a job with additional tags'''
+        return self.client._tag([], ['add', self.jid, repr(time.time())] + list(tags))
     
     def untag(self, *tags):
-        args = ['remove', self.jid, repr(time.time())]
-        args.extend(tags)
-        return self.client._tag([], args)
+        '''Remove tags from a job'''
+        return self.client._tag([], ['remove', self.jid, repr(time.time())] + list(tags))
 
 # The Job class
 class Job(BaseJob):
-    # This is a dictionary of all the classes that we've seen, and
-    # the last load time for each of them. We'll use this either for
-    # the debug mode or the general mechanism
-    _loaded = {}
-        
     def __init__(self, client, **kwargs):
+        BaseJob.__init__(self, client, **kwargs)
         self.client = client
-        for att in ['data', 'jid', 'priority', 'tags', 'state',
-        'tracked', 'failure', 'history', 'dependents', 'dependencies']:
+        for att in ['state', 'tracked', 'failure', 'history', 'dependents', 'dependencies']:
             object.__setattr__(self, att, kwargs[att])
         
-        self.klass_name = kwargs['klass']
-        self.expires_at = kwargs['expires']
-        self.queue_name = kwargs['queue']
-        self.original_retries = kwargs['retries']
-        self.retries_left     = kwargs['remaining']
-        self.worker_name      = kwargs['worker']
-        # Because of how Lua parses JSON, empty tags comes through as {}
-        self.tags         = self.tags         or []
-        self.dependents   = self.dependents   or []
-        self.dependencies = self.dependencies or []
-    
-    def __setattr__(self, key, value):
-        if key == 'priority':
-            if self.client._priority([], [self.jid, value]) != None:
-                object.__setattr__(self, key, value)
-        else:
-            object.__setattr__(self, key, value)
+        # The reason we're using object.__setattr__ directly is because
+        # we have __setattr__ defined for this class, and we're actually
+        # just interested in setting these memebers directly
+        object.__setattr__(self, 'expires_at'      , kwargs['expires'])
+        object.__setattr__(self, 'original_retries', kwargs['retries'])
+        object.__setattr__(self, 'retries_left'    , kwargs['remaining'])
+        object.__setattr__(self, 'worker_name'     , kwargs['worker'])
+        # Because of how Lua parses JSON, empty lists come through as {}
+        object.__setattr__(self, 'dependents'      , kwargs['dependents'] or [])
+        object.__setattr__(self, 'dependencies'    , kwargs['dependencies'] or [])
     
     def __getattr__(self, key):
         if key == 'ttl':
@@ -95,33 +103,13 @@ class Job(BaseJob):
     def __setitem__(self, key, value):
         self.data[key] = value
     
-    def __str__(self):
-        import pprint
-        s  = 'qless:Job : %s\n' % self.jid
-        s += '\tpriority: %i\n' % self.priority
-        s += '\ttags: %s\n' % ', '.join(self.tags)
-        s += '\tworker: %s\n' % self.worker_name
-        s += '\texpires_at: %i\n' % self.expires_at
-        s += '\tstate: %s\n' % self.state
-        s += '\tqueue: %s\n' % self.queue_name
-        s += '\thistory:\n'
-        for h in self.history:
-            s += '\t\t%s (%s)\n' % (h['q'], h.get('workers', ''))
-            s += '\t\tput: %i\n' % h['put']
-            if h.get('popped'):
-                s += '\t\tpopped: %i\n' % h['popped']
-            if h.get('completed'):
-                s += '\t\tcompleted: %i\n' % h['completed']
-        s += '\tdata: %s' % pprint.pformat(self.data)
-        return s
-    
     def __repr__(self):
         return '<%s %s>' % (self.klass_name, self.jid)
     
     def process(self):
-        # Based on the queue that this was in, we should call the appropriate
-        # method. So if it was in the 'testing' queue, we should call 'testing'
-        # If it doesn't have the appropriate function, we'll call process on it
+        '''Load the module containing your class, and run the appropriate method. For example,
+        if this job was popped from the queue ``testing``, then this would invoke the ``testing``
+        staticmethod of your class.'''
         method = getattr(self.klass, self.queue_name, getattr(self.klass, 'process', None))
         if method:
             if isinstance(method, types.FunctionType):
@@ -143,18 +131,9 @@ class Job(BaseJob):
             self.fail(self.queue_name + '-method-missing', self.klass_name + ' is missing a method "' + self.queue_name + '" or "process"')
     
     def move(self, queue, delay=0, depends=None):
-        '''Put(1, queue, id, data, now, [priority, [tags, [delay]]])
-        ---------------------------------------------------------------    
-        Either create a new job in the provided queue with the provided attributes,
-        or move that job into that queue. If the job is being serviced by a worker,
-        subsequent attempts by that worker to either `heartbeat` or `complete` the
-        job should fail and return `false`.
-        
-        The `priority` argument should be negative to be run sooner rather than 
-        later, and positive if it's less important. The `tags` argument should be
-        a JSON array of the tags associated with the instance and the `valid after`
-        argument should be in how many seconds the instance should be considered 
-        actionable.'''
+        '''Move this job out of its existing state and into another queue. If a worker
+        has been given this job, then that worker's attempts to heartbeat that job will
+        fail. Like ``Queue.put``, this accepts a delay, and dependencies'''
         logger.info('Moving %s to %s from %s' % (self.jid, queue, self.queue_name))
         return self.client._put([queue], [
             self.jid,
@@ -166,10 +145,8 @@ class Job(BaseJob):
         ])
     
     def complete(self, next=None, delay=None, depends=None):
-        '''Complete(0, id, worker, queue, now, [data, [next, [delay]]])
-        -----------------------------------------------
-        Complete a job and optionally put it in another queue, either scheduled or to
-        be considered waiting immediately.'''
+        '''Turn this job in as complete, optionally advancing it to another queue. Like
+        ``Queue.put`` and ``move``, it accepts a delay, and dependencies'''
         if next:
             logger.info('Advancing %s to %s from %s' % (self.jid, next, self.queue_name))
             return self.client._complete([], [self.jid, self.client.worker_name, self.queue_name,
@@ -181,16 +158,12 @@ class Job(BaseJob):
                 repr(time.time()), json.dumps(self.data)]) or False
     
     def heartbeat(self):
-        '''Heartbeat(0, id, worker, expiration, [data])
-        -------------------------------------------
-        Renew the heartbeat, if possible, and optionally update the job's user data.'''
+        '''Renew the heartbeat, if possible, and optionally update the job's user data.'''
         self.expires_at = float(self.client._heartbeat([], [self.jid, self.client.worker_name, repr(time.time()), json.dumps(self.data)]) or 0)
         return self.expires_at
     
     def fail(self, group, message):
-        '''Fail(0, id, worker, group, message, now, [data])
-        ---------------------------------------------------
-        Mark the particular job as failed, with the provided type, and a more specific
+        '''Mark the particular job as failed, with the provided type, and a more specific
         message. By `type`, we mean some phrase that might be one of several categorical
         modes of failure. The `message` is something more job-specific, like perhaps
         a traceback.
@@ -208,39 +181,32 @@ class Job(BaseJob):
         logger.warn('Failing %s (%s): %s' % (self.jid, group, message))
         return self.client._fail([], [self.jid, self.client.worker_name, group, message, repr(time.time()), json.dumps(self.data)]) or False
     
-    def cancel(self):
-        '''Cancel(0, id)
-        -------------
-        Cancel a job from taking place. It will be deleted from the system, and any
-        attempts to renew a heartbeat will fail, and any attempts to complete it
-        will fail. If you try to get the data on the object, you will get nothing.'''
-        return self.client._cancel([], [self.jid])
-    
     def track(self):
+        '''Begin tracking this job'''
         return self.client._track([], ['track', self.jid, repr(time.time())])
     
     def untrack(self):
+        '''Stop tracking this job'''
         return self.client._track([], ['untrack', self.jid, repr(time.time())])
     
     def retry(self, delay=0):
+        '''Retry this job in a little bit, in the same queue. This is meant for the times
+        when you detect a transient failure yourself'''
         result = self.client._retry([], [self.jid, self.queue_name, self.worker_name, repr(time.time()), delay])
         if result == None:
             return False
         return result
     
     def depend(self, *args):
-        # Depends(0, jid, ('on', [jid, [jid, [...]]]) | ('off', ('all' | [jid, [jid, [...]]]))
-        # ------------------------------------------------------------------------------------
-        # Add or remove dependencies a job has. If 'on' is provided, the provided jids are 
-        # added as dependencies. If 'off' and 'all' are provided, then all the current dependencies
-        # are removed. If 'off' is provided and the next argument is not 'all', then those
-        # jids are removed as dependencies.
-        # 
-        # If a job is not already in the 'depends' state, then this call will return false.
-        # Otherwise, it will return true
+        '''If and only if a job already has other dependencies, this will add more jids
+        to the list of this job's dependencies.'''
         return self.client._depends([], [self.jid, 'on'] + list(args)) or False
     
     def undepend(self, *args, **kwargs):
+        '''Remove specific (or all) job dependencies from this job::
+            
+            job.remove(jid1, jid2)
+            job.remove(all=True)'''
         if kwargs.get('all', False):
             return self.client._depends([], [self.jid, 'off', 'all']) or False
         else:
@@ -267,9 +233,11 @@ class RecurringJob(BaseJob):
         return object.__setattr__(self, key, value)
     
     def move(self, queue):
+        '''Make this recurring job attached to another queue'''
         return self.client._recur([], ['update', self.jid, 'queue', queue])
     
     def cancel(self):
+        '''Cancel all future recurring jobs'''
         self.client._recur([], ['off', self.jid])
     
     def tag(self, *tags):

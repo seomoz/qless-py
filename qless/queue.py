@@ -39,27 +39,28 @@ class Queue(object):
             return self.jobs
         if key == 'counts':
             return json.loads(self.client._queues([], [time.time(), self.name]))
+        if key == 'heartbeat':
+            a = client.config.all
+            return int(a.get(self.name + '-heartbeat', a.get('heartbeat', 60)))
         raise AttributeError('qless.Queue has no attribute %s' % key)
     
     def __setattr__(self, key, value):
         if key == 'heartbeat':
-            self.client.config.set(self.name + '-heartbeat', value)
+            self.client.config[self.name + '-heartbeat'] = value
         else:
             object.__setattr__(self, key, value)
     
     def put(self, klass, data, priority=None, tags=None, delay=None, retries=None, jid=None, depends=None):
-        # '''Put(1, queue, id, data, now, [priority, [tags, [delay, [retries]]]])
-        # -----------------------------------------------------------------------
-        # Either create a new job in the provided queue with the provided attributes,
-        # or move that job into that queue. If the job is being serviced by a worker,
-        # subsequent attempts by that worker to either `heartbeat` or `complete` the
-        # job should fail and return `false`.
-        #     
-        # The `priority` argument should be negative to be run sooner rather than 
-        # later, and positive if it's less important. The `tags` argument should be
-        # a JSON array of the tags associated with the instance and the `valid after`
-        # argument should be in how many seconds the instance should be considered 
-        # actionable.'''
+        '''Either create a new job in the provided queue with the provided attributes,
+        or move that job into that queue. If the job is being serviced by a worker,
+        subsequent attempts by that worker to either `heartbeat` or `complete` the
+        job should fail and return `false`.
+            
+        The `priority` argument should be negative to be run sooner rather than 
+        later, and positive if it's less important. The `tags` argument should be
+        a JSON array of the tags associated with the instance and the `valid after`
+        argument should be in how many seconds the instance should be considered 
+        actionable.'''
         return self.client._put([self.name], [
             jid or uuid.uuid4().hex,
             klass.__module__ + '.' + klass.__name__,
@@ -73,9 +74,6 @@ class Queue(object):
         ])
     
     def recur(self, klass, data, interval, offset=0, priority=None, tags=None, retries=None, jid=None):
-        # -- Recur(0, 'on', queue, jid, klass, data, now, 'interval', second, offset, [priority p], [tags t], [retries r])
-        # -- Recur(0, 'off', jid)
-        # -- Recur(0, 'get', jid)
         return self.client._recur([], ['on', self.name,
             jid or uuid.uuid4().hex,
             klass.__module__ + '.' + klass.__name__,
@@ -88,9 +86,7 @@ class Queue(object):
         ])
     
     def pop(self, count=None):
-        '''Pop(1, queue, worker, count, now, expiration)
-        ---------------------------------------------
-        Passing in the queue from which to pull items, the current time, when the locks
+        '''Passing in the queue from which to pull items, the current time, when the locks
         for these returned items should expire, and the number of items to be popped
         off.'''
         results = [Job(self.client, **json.loads(j)) for j in self.client._pop([self.name], [self.worker_name, count or 1, repr(time.time())])]
@@ -99,20 +95,15 @@ class Queue(object):
         return results
     
     def peek(self, count=None):
-        '''Peek(1, queue, count, now)
-        --------------------------
-        Similar to the `Pop` command, except that it merely peeks at the next items
-        in the queue.'''
+        '''Similar to the pop command, except that it merely peeks at the next items'''
         results = [Job(self.client, **json.loads(r)) for r in self.client._peek([self.name], [count or 1, repr(time.time())])]
         if count == None:
             return (len(results) and results[0]) or None
         return results
     
     def stats(self, date=None):
-        '''Stats(0, queue, date)
-        ---------------------
-        Return the current statistics for a given queue on a given date. The results 
-        are returned are a JSON blob:
+        '''Return the current statistics for a given queue on a given date. The results 
+        are returned are a JSON blob::
         
             {
                 'total'    : ...,
