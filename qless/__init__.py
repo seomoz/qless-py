@@ -85,6 +85,36 @@ class Queues(object):
         '''Get a queue object associated with the provided queue name'''
         return Queue(queue_name, self.client, self.client.worker_name)
 
+class Events(object):
+    def __init__(self, client):
+        self.pubsub    = client.redis.pubsub()
+        self.callbacks = dict(
+            (k, None) for k in ('canceled', 'completed', 'failed', 'popped', 'stalled', 'put', 'track', 'untrack')
+        )
+        r = [self.pubsub.subscribe(k) for k in self.callbacks.keys()]
+    
+    def next(self):
+        message = self.pubsub.listen().next()
+        f = (message and message['type'] == 'message' and self.callbacks.get(message['channel']))
+        if f:
+            f(message['data'])
+    
+    def listen(self):
+        try:
+            while True:
+                self.next()
+        except redis.ConnectionError:
+            return
+    
+    def on(self, evt, f):
+        if evt not in self.callbacks:
+            raise NotImplementedError('callback "%s"' % evt)
+        else:
+            self.callbacks[evt] = f
+    
+    def off(self, evt):
+        return self.callbacks.pop(evt, None)
+
 class client(object):
     def __init__(self, host='localhost', port=6379, hostname = None, **kwargs):
         import os
@@ -95,6 +125,7 @@ class client(object):
         # conceivably someone might want to work with multiple
         # instances simultaneously.
         self.redis   = redis.Redis(host, port, **kwargs)
+        self.events  = Events(self)
         self.config  = Config(self)
         self.jobs    = Jobs(self)
         self.workers = Workers(self)
@@ -105,9 +136,26 @@ class client(object):
             'pop', 'priority', 'put', 'queues', 'recur', 'retry', 'stats', 'tag', 'track', 'workers']:
             setattr(self, '_%s' % cmd, lua(cmd, self.redis))
     
+    def track(self, jid):
+        '''Begin tracking this job'''
+        return self._track([], ['track', jid, repr(time.time())])
+    
+    def untrack(self, jid):
+        '''Stop tracking this job'''
+        return self._track([], ['untrack', jid, repr(time.time())])
+    
     def tags(self, offset=0, count=100):
         '''The most common tags among jobs'''
         return json.loads(self._tag([], ['top', offset, count]))
+    
+    def event(self):
+        '''Listen for a single event'''
+        pass
+    
+    def events(self, *args, **kwargs):
+        '''Listen indefinitely for all events'''
+        while True:
+            self.event(*args, **kwargs)
 
 from lua import lua
 from job import Job, RecurringJob
