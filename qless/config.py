@@ -12,24 +12,24 @@ class Config(object):
         Get the current configuration value for that option, or if option is omitted,
         then get all the configuration values.'''
         if attr == 'all':
-            return json.loads(self.client._getconfig([], []))
+            return json.loads(self.client._config([], ['get']))
         raise AttributeError('qless.Config has no attribute %s' % attr)
     
     def __len__(self):
         return len(self.all)
     
     def __getitem__(self, option):
-        return self.client._getconfig([], [option])
+        return self.client._config([], ['get', option])
     
     def __setitem__(self, option, value):
         '''SetConfig(0, option, [value])
         -----------------------------
         Set the configuration value for the provided option. If `value` is omitted,
         then it will remove that configuration option.'''
-        return self.client._setconfig([], [option, value])
+        return self.client._config([], ['set', option, value])
     
     def __delitem__(self, option):
-        return self.client._setconfig([], [option])
+        return self.client._config([], ['unset', option])
     
     def __contains__(self, option):
         return dict.__contains__(self.all, option)
@@ -39,7 +39,7 @@ class Config(object):
     
     def clear(self):
         for key in self.all.keys():
-            self.client._setconfig([], [key])
+            self.client._config([], ['unset', key])
     
     def get(self, option, default=None):
         r = self[option]

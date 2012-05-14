@@ -1887,6 +1887,16 @@ class TestEverything(TestQless):
         self.assertRaises(Exception, complete, *([], ['deadbeef', 'worker1', 'foo', 12345, '{}', 'delay', 5]))
         self.assertRaises(Exception, complete, *([], ['deadbeef', 'worker1', 'foo', 12345, '{}', 'depends', '["foo"]']))
     
+    def test_lua_config(self):
+        config = qless.lua('config', self.redis)
+        # Passing in keys
+        self.assertRaises(Exception, config, *(['foo'], []))
+        # Unknown command
+        self.assertRaises(Exception, config, *([], ['bar']))
+        self.assertRaises(Exception, config, *([], ['unset']))
+        self.assertRaises(Exception, config, *([], ['set']))
+        self.assertRaises(Exception, config, *([], ['set', 'foo']))
+    
     def test_lua_fail(self):
         fail = qless.lua('fail', self.redis)
         # Passing in keys
@@ -1921,11 +1931,6 @@ class TestEverything(TestQless):
         self.assertRaises(Exception, get, *(['foo'], ['deadbeef']))
         # Missing id
         self.assertRaises(Exception, get, *([], []))
-    
-    def test_lua_getconfig(self):
-        getconfig = qless.lua('getconfig', self.redis)
-        # Passing in keys
-        self.assertRaises(Exception, getconfig, *(['foo']))
     
     def test_lua_heartbeat(self):
         heartbeat = qless.lua('heartbeat', self.redis)
@@ -2088,11 +2093,6 @@ class TestEverything(TestQless):
         self.assertRaises(Exception, retry, *([], ['12345', 'testing', 'worker', 'howdy']))
         # Malformed delay
         self.assertRaises(Exception, retry, *([], ['12345', 'testing', 'worker', 12345, 'howdy']))
-    
-    def test_lua_setconfig(self):
-        setconfig = qless.lua('setconfig', self.redis)
-        # Passing in keys
-        self.assertRaises(Exception, setconfig, *(['foo'], []))
     
     def test_lua_stats(self):
         stats = qless.lua('stats', self.redis)

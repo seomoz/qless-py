@@ -101,8 +101,8 @@ class client(object):
         self.queues  = Queues(self)
         # Client's lua scripts
         for cmd in [
-            'cancel', 'complete', 'depends', 'fail', 'failed', 'get', 'getconfig', 'heartbeat', 'jobs', 'peek',
-            'pop', 'priority', 'put', 'queues', 'recur', 'retry', 'setconfig', 'stats', 'tag', 'track', 'workers']:
+            'cancel', 'config', 'complete', 'depends', 'fail', 'failed', 'get', 'heartbeat', 'jobs', 'peek',
+            'pop', 'priority', 'put', 'queues', 'recur', 'retry', 'stats', 'tag', 'track', 'workers']:
             setattr(self, '_%s' % cmd, lua(cmd, self.redis))
     
     def tags(self, offset=0, count=100):
