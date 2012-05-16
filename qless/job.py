@@ -232,6 +232,12 @@ class RecurringJob(BaseJob):
             return self.client._recur([], ['update', self.jid, 'klass', name]) and object.__setattr__(self, 'klass_name', name) and object.__setattr__(self, 'klass', value)
         return object.__setattr__(self, key, value)
     
+    def __getattr__(self, key):
+        if key == 'next':
+            # The time (seconds since epoch) until the next time it's run
+            return self.client.redis.zscore('ql:q:' + self.queue_name + '-recur', self.jid)
+        return BaseJob.__getattr__(self, key)
+    
     def move(self, queue):
         '''Make this recurring job attached to another queue'''
         return self.client._recur([], ['update', self.jid, 'queue', queue])
@@ -245,4 +251,3 @@ class RecurringJob(BaseJob):
     
     def untag(self, *tags):
         return self.client._recur([], ['untag', self.jid] + list(tags))
-    
