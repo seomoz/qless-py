@@ -14,6 +14,18 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 logger.setLevel(logging.FATAL)
 
+# A decorator to specify a bunch of exceptions that should be caught
+# and the job retried. It turns out this comes up with relative frequency
+def retry(*exceptions):
+    def decorator(f):
+        def _f(job):
+            try:
+                f(job)
+            except tuple(exceptions):
+                job.retry()
+        return _f
+    return decorator
+
 class Jobs(object):
     def __init__(self, client):
         self.client = client
