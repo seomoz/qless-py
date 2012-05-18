@@ -1,36 +1,69 @@
-qless-py
+qless
+=====
+
+Qless is a powerful `Redis`-based job queueing system inspired by
+[resque](https://github.com/defunkt/resque#readme),
+but built on a collection of Lua scripts, maintained in the
+[qless-core](https://github.com/seomoz/qless-core) repo.
+
+Philosophy and Nomenclature
+===========================
+A `job` is a unit of work identified by a job id or `jid`. A `queue` can contain
+several jobs that are scheduled to be run at a certain time, several jobs that are
+waiting to run, and jobs that are currently running. A `worker` is a process on a
+host, identified uniquely, that asks for jobs from the queue, performs some process
+associated with that job, and then marks it as complete. When it's completed, it
+can be put into another queue.
+
+Jobs can only be in one queue at a time. That queue is whatever queue they were last
+put in. So if a worker is working on a job, and you move it, the worker's request to
+complete the job will be ignored.
+
+A job can be `canceled`, which means it disappears into the ether, and we'll never
+pay it any mind every again. A job can be `dropped`, which is when a worker fails
+to heartbeat or complete the job in a timely fashion, or a job can be `failed`,
+which is when a host recognizes some systematically problematic state about the
+job. A worker should only fail a job if the error is likely not a transient one;
+otherwise, that worker should just drop it and let the system reclaim it.
+
+Features
 ========
 
-Python bindings for [`qless`](https://github.com/seomoz/qless). Qless is a work
-queue, based on Redis, and inspired by Resque, but with several key differences:
-
-1. __Jobs can't get dropped__ -- jobs have to be checked back in as completed, and 
-	long jobs can heartbeat, to ensure that they don't get quietly dropped on
-	the floor by a worker
-1. __Stats__ -- qless automatically keeps summary statistics about how long jobs wait,
-	how long they take to run, etc.
-1. __Scheduling__ -- qless supports scheduling jobs right out of the box
-1. __Dependendies__ -- jobs can wait for another job(s) to complete before being 
-	worked on
-1. __Recurring Jobs__ -- jobs can be set to recur periodically
-1. __History__ -- each job knows everything that's happend to it. From when it was
-	first enqueued, to when it was popped, failed, and completed
-1. __Priority__ -- jobs aren't restricted to priorities of 'high', 'medium' and 'low',
-	but any integer. Jobs with the same priority are popped off in the order
-	they were inserted
-1. __Tagging and Tracking__ -- jobs can be tagged in a searchable way, and flagged for
-	tracking, making it easy to keep tabs on important jobs (like jobs mentioned
-	in bug reports, for example).
-
-With all these differences, it's like Resque in that it comes bundled with a web 
-app (available in the `qless` gem), and is high-performance.
+1. __Jobs don't get dropped on the floor__ -- Sometimes workers drop jobs. Qless
+  automatically picks them back up and gives them to another worker
+1. __Tagging / Tracking__ -- Some jobs are more interesting than others. Track those
+  jobs to get updates on their progress. Tag jobs with meaningful identifiers to
+  find them quickly in the UI.
+1. __Job Dependencies__ -- One job might need to wait for another job to complete
+1. __Stats__ -- `qless` automatically keeps statistics about how long jobs wait
+  to be processed and how long they take to be processed. Currently, we keep
+  track of the count, mean, standard deviation, and a histogram of these times.
+1. __Job data is stored temporarily__ -- Job info sticks around for a configurable
+  amount of time so you can still look back on a job's history, data, etc.
+1. __Priority__ -- Jobs with the same priority get popped in the order they were
+  inserted; a higher priority means that it gets popped faster
+1. __Retry logic__ -- Every job has a number of retries associated with it, which are
+  renewed when it is put into a new queue or completed. If a job is repeatedly
+  dropped, then it is presumed to be problematic, and is automatically failed.
+1. __Web App__ -- With the advent of a Ruby client, there is a Sinatra-based web
+  app that gives you control over certain operational issues
+1. __Scheduled Work__ -- Until a job waits for a specified delay (defaults to 0),
+  jobs cannot be popped by workers
+1. __Recurring Jobs__ -- Scheduling's all well and good, but we also support
+  jobs that need to recur periodically.
+1. __Notifications__ -- Tracked jobs emit events on pubsub channels as they get
+  completed, failed, put, popped, etc. Use these events to get notified of
+  progress on jobs you're interested in.
 
 Interest piqued? Then read on!
 
 Installation
 ============
+Install from pip:
 
-You can install qless-py from source by checking it out from github, and checking out
+	pip install qless-py
+
+Alternatively, install qless-py from source by checking it out from github, and checking out
 the qless-core submodule:
 
 	git clone git://github.com/seomoz/qless-py.git
@@ -137,7 +170,7 @@ Running
 All that remains is to have workers actually run these jobs. This distribution comes with a
 script to help with this:
 
-	qless-py-worker --queue underpants --queue unknown --queue profit
+	qless-py-worker -q underpants -q unknown -q profit
 
 This script actually forks off several subprocesses that perform the work, and the original
 process keeps tabs on them to ensure that they are all up and running. In the future, the
@@ -219,22 +252,18 @@ something more. Hopefully after this section many of your questions will be answ
 Priority
 --------
 Jobs can optionally have priority associated with them. Jobs of equal priority are popped
-in the order in which they were put in a queue. The lower the priority, the sooner it will
-be processed (it's sort of like `nice`ness). If, for example, you get a new job to collect
-some really valuable underpants, then:
+in the order in which they were put in a queue. The higher the priority, the sooner it will
+be processed. If, for example, you get a new job to collect some really valuable underpants:
 
-	queue.put(qless.gnomes.GnomesJob, {'address': '123 Brief St.'}, priority = -100)
+	queue.put(qless.gnomes.GnomesJob, {'address': '123 Brief St.'}, priority = 10)
 
-Tags
-----
-Jobs can have string tags associated with them. Currently, they're justs a piece of metadata
-that's associated with each job, but in the future, these will likely be indexed for quick
-access.
+You can also adjust a job's priority while it's waiting:
 
-	queue.put(qless.gnomes.GnomesJob, {}, tags=['tidy', 'white', 'briefs'])
+	job = client.jobs['83da4d32a0a811e1933012313b062cf1']
+	job.priority = 25
 
-Delay
------
+Scheduled Jobs
+--------------
 Jobs can also be scheduled for the future with a delay (in seconds). If for example, you just
 learned of an underpants heist opportunity, but you have to wait until later:
 
@@ -245,19 +274,7 @@ that this job will only be considered valid after the delay has passed, at which
 be subject to the normal constraints. If you want it to be processed very soon after the delay
 expires, you could also boost its priority:
 
-	queue.put(qless.gnomes.GnomesJob, {}, delay=3600, priority=-1000)
-	
-Job Dependencies
-----------------
-Jobs can be made dependent on the completion of another job. For example, if you
-need to buy eggs, and buy a pan before making an omelete, you could say:
-
-	eggs_jid = client.queues['buy_eggs'].put(myJob, {'count': 12})
-	pan_jid  = client.queues['buy_pan' ].put(myJob, {'coating': 'non-stick'})
-	client.queues['omelete'].put(myJob, {'toppings': ['onions', 'ham']}, depends=[eggs_jid, pan_jid])
-
-That way, the job to make the omelete can't be performed until the pan and eggs
-purchases have been completed.
+	queue.put(qless.gnomes.GnomesJob, {}, delay=3600, priority=100)
 
 Recurring Jobs
 --------------
@@ -273,6 +290,91 @@ That will spawn a job right now, but it's possible you'd like to have it recur,
 but maybe the first job should wait a little bit:
 
 	client.queues['maintenance'].recur(..., interval=86400, offset=3600)
+
+You can always update the tags, priority and even the interval of a recurring job:
+
+	job = client.jobs['83da4d32a0a811e1933012313b062cf1']
+	job.priority = 20
+	job.tag('foo', 'bar')
+	job.untag('hello')
+	job.interval = 7200
+
+These attributes aren't attached to the recurring jobs, per se, but it's used as the template
+for the job that it creates. In the case where more than one interval passes before a worker
+tries to pop the job, __more than one job is created__. The thinking is that while it's
+completely client-managed, the state should not be dependent on how often workers are trying
+to pop jobs.
+
+	# Recur every minute
+	queue.recur(..., {'lots': 'of jobs'}, 60)
+	# Wait 5 minutes
+	len(queue.pop(10))
+	# => 5 jobs got popped
+
+Configuration Options
+=====================
+You can get and set global (read: in the context of the same Redis instance) configuration
+to change the behavior for heartbeating, and so forth. There aren't a tremendous number
+of configuration options, but an important one is how long job data is kept around. Job
+data is expired after it has been completed for `jobs-history` seconds, but is limited to
+the last `jobs-history-count` completed jobs. These default to 50k jobs, and 30 days, but
+depending on volume, your needs may change. To only keep the last 500 jobs for up to 7 days:
+
+	client.config['jobs-history'] = 7 * 86400
+	client.config['jobs-history-count'] = 500
+
+Tagging / Tracking
+------------------
+In qless, 'tracking' means flagging a job as important. Tracked jobs have a tab reserved
+for them in the web interface, and they also emit subscribable events as they make progress
+(more on that below). You can flag a job from the web interface, or the corresponding code:
+
+	client.jobs['b1882e009a3d11e192d0b174d751779d'].track()
+
+Jobs can be tagged with strings which are indexed for quick searches. For example, jobs
+might be associated with customer accounts, or some other key that makes sense for your
+project.
+
+	queue.put(qless.gnomes.GnomesJob, {'tags': 'aplenty'}, tags=['12345', 'foo', 'bar'])
+
+This makes them searchable in the web interface, or from code:
+
+	jids = client.jobs.tagged('foo')
+
+You can add or remove tags at will, too:
+
+	job = client.jobs['b1882e009a3d11e192d0b174d751779d']
+	job.tag('howdy', 'hello')
+	job.untag('foo', 'bar')
+
+Job Dependencies
+----------------
+Jobs can be made dependent on the completion of another job. For example, if you
+need to buy eggs, and buy a pan before making an omelete, you could say:
+
+	eggs_jid = client.queues['buy_eggs'].put(myJob, {'count': 12})
+	pan_jid  = client.queues['buy_pan' ].put(myJob, {'coating': 'non-stick'})
+	client.queues['omelete'].put(myJob, {'toppings': ['onions', 'ham']}, depends=[eggs_jid, pan_jid])
+
+That way, the job to make the omelete can't be performed until the pan and eggs
+purchases have been completed.
+
+Notifications
+-------------
+Tracked jobs emit events on specific pubsub channels as things happen to them. Whether
+it's getting popped off of a queue, completed by a worker, etc. The jist of it goes like
+this, though:
+
+	def callback(evt, jid):
+		print '%s => %s' % (jid, evt)
+	
+	from functools import partial
+	for evt in ['canceled', 'completed', 'failed', 'popped', 'put', 'stalled', 'track', 'untrack']:
+		client.events.on(evt, partial(callback, evt))
+	client.events.listen()
+
+If you're interested in, say, getting growl or campfire notifications, you should check out the
+`qless-growl` and `qless-campfire` ruby gems.
 
 Retries
 -------
@@ -300,9 +402,9 @@ turn it in as completed. You can get the absolute time until it expires, or how
 long you have left:
 
 	# When I have to heartbeat / complete it by (seconds since epoch)
-	job.expires
+	job.expires_at
 	# How long until it expires
-	job.ttl()
+	job.ttl
 
 If your lease on the job will expire before you have a chance to complete it, then
 you should heartbeat it to make sure that no other worker gets access to it. Or, if
@@ -325,51 +427,19 @@ that took _x_ time to run.
 
 Frankly, these are best viewed using the web app.
 
-Web App
-=======
-
-`Qless` also comes with a web app for administrative tasks, like keeping tabs on the 
-progress of jobs, tracking specific jobs, retrying failed jobs, etc. It's available
-in the [`qless`](https://github.com/seomoz/qless) library as a mountable
-[`Sinatra`](http://www.sinatrarb.com/) app. The web app is language agnostic and was
-one of the major desires out of this project, so you should consider using it even 
-if you're not planning on using the Ruby client.
-
-Internals
-=========
-
 Lua
 ---
-
 Qless is a set of client language bindings, but the majority of the work is done in 
 a collection of Lua scripts that comprise the [core](https://github.com/seomoz/qless-core)
 functionality. These scripts run on the Redis 2.6+ server atomically and allow for
 portability with the same functionality guarantees. Consult the documentation for 
 `qless-core` to learn more about its internals.
 
-Concepts and Philosphy
-======================
-
-Jobs are units of work that can be placed in queues. Jobs keep track of the history of
-put / pop / fail events, as well as workers that have worked on a job. A job can appear
-in only one queue at a time, and have a type and a JSON blob of user data associated
-with it.
-
-Workers can pop a job, and they get an exclusive lock on that job for a limited time.
-This lock can be renewed by heartbeating the job to assure qless that the worker has
-not disappeared and is indeed still working on it. The maximum allowable time between
-heartbeats is configurable.
-
-Configuration
-=============
-
-Qless maintains global configuration for certain pieces of data:
-
-1. `heartbeat` (60) | default heartbeat (seconds) for queues
-1. `heartbeat-<queue-name>` | heartbeat (seconds) for a specific queue
-1. `stats-history` (30) | number of days for which to store summary stats
-1. `histogram-history` (7) | The number of days to store histogram data
-1. `jobs-history-count` (50k) --
-	How many jobs to keep data for after they're completed
-1. `jobs-history` (7 * 24 * 60 * 60) --
-	How many seconds to keep jobs after they're completed
+Web App
+-------
+`Qless` also comes with a web app for administrative tasks, like keeping tabs on the 
+progress of jobs, tracking specific jobs, retrying failed jobs, etc. It's available
+in the [`qless`](https://github.com/seomoz/qless) library as a mountable
+[`Sinatra`](http://www.sinatrarb.com/) app. The web app is language agnostic and was
+one of the major desires out of this project, so you should consider using it even 
+if you're not planning on using the Ruby client.

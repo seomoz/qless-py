@@ -700,11 +700,11 @@ class TestPriority(TestQless):
     # 3) If a job's in a queue, but already popped, then we just update the 
     #   job's priority.
     def test_priority(self):
-        a = self.q.put(qless.Job, {'test': 'test_priority'}, priority = -10)
+        a = self.q.put(qless.Job, {'test': 'test_priority'}, priority = 10)
         b = self.q.put(qless.Job, {'test': 'test_priority'})
         self.assertEqual(self.q.peek().jid, a)
         job = self.client.jobs[b]
-        job.priority = -20
+        job.priority = 20
         self.assertEqual(len(self.q), 2)
         self.assertEqual(self.q.peek().jid, b)
         job = self.q.pop()
@@ -713,7 +713,7 @@ class TestPriority(TestQless):
         job = self.q.pop()
         self.assertEqual(len(self.q), 2)
         self.assertEqual(job.jid, a)
-        job.priority = -30
+        job.priority = 30
         # Make sure it didn't get doubly-inserted in the queue
         self.assertEqual(len(self.q), 2)
         self.assertEqual(self.q.peek(), None)
@@ -1023,7 +1023,7 @@ class TestEverything(TestQless):
         #   1) Insert 10 jobs into the queue with successively more priority
         #   2) Pop all the jobs, and ensure that with each pop we get the right one
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
-        jids = [self.q.put(qless.Job, {'test': 'put_pop_priority', 'count': c}, priority=-c) for c in range(10)]
+        jids = [self.q.put(qless.Job, {'test': 'put_pop_priority', 'count': c}, priority=c) for c in range(10)]
         last = len(jids)
         for i in range(len(jids)):
             job = self.q.pop()

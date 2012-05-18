@@ -12,11 +12,11 @@ except ImportError:
 	}
 
 setup(name               = 'qless-py',
-	version              = '0.0.1',
-	description          = 'Redis Queue Management',
+	version              = '0.9.0',
+	description          = 'Redis-based Queue Management',
 	long_description     = '''
         Redis-based queue management, with heartbeating, job tracking,
-        stats, and a whole lot more.
+        stats, notifications, and a whole lot more.
     ''',
 	url                  = 'http://github.com/seomoz/qless-py',
 	author               = 'Dan Lecocq',
