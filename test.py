@@ -366,6 +366,7 @@ class TestRecurring(TestQless):
         time.advance(100)
         self.assertEqual(self.q.pop()    , None)
         self.assertEqual(self.other.pop().complete(), 'complete')
+        self.assertEqual(self.client.jobs[jid].queue_name, 'other')
     
     def test_change_tags(self):
         # We should be able to add and remove tags from a recurring job,
