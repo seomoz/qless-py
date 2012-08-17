@@ -1266,8 +1266,30 @@ class TestEverything(TestQless):
         self.assertTrue((bjob.heartbeat() + 11) >= time.time())
         self.assertEqual(ajob.heartbeat(), False)
     
+    def test_locks_workers(self):
+        # When a worker loses a lock on a job, that job should be removed
+        # from the list of jobs owned by that worker
+        jid = self.q.put(qless.Job, {"test": "locks"}, retries=1)
+        self.client.config["heartbeat"] = -10
 
-    
+        ajob = self.a.pop()
+        # Get the workers
+        workers = dict((w['name'], w) for w in self.client.workers.counts)
+        self.assertEqual(workers[self.a.worker_name]["stalled"], 1)
+
+        # Should have one more retry, so we should be good
+        bjob = self.b.pop()
+        workers = dict((w['name'], w) for w in self.client.workers.counts)
+        self.assertEqual(workers[self.a.worker_name]["stalled"], 0)
+        self.assertEqual(workers[self.b.worker_name]["stalled"], 1)
+
+        # Now it's automatically failed. Shouldn't appear in either worker
+        bjob = self.b.pop()
+        workers = dict((w['name'], w) for w in self.client.workers.counts)
+        self.assertEqual(workers[self.a.worker_name]["stalled"], 0)
+        self.assertEqual(workers[self.b.worker_name]["stalled"], 0)
+
+
     def test_cancel(self):
         # In this test, we want to make sure that we can corretly
         # cancel a job
