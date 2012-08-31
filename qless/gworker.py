@@ -25,11 +25,12 @@ class Worker(worker.Worker):
         pid = os.getpid()
         server = backdoor.BackdoorServer(('127.0.0.1', pid))
         logger.info('Listening on %s' % pid)
-        server.start()
+        #server.start()
 
         from gevent.pool import Pool
         from gevent import sleep, Greenlet
-        pool = Pool(self.pool_size)
+        pool = Pool(self.pool_size + 1)
+        pool.start(Greenlet(server.serve_forever))
         while True:
             try:
                 seen = False
