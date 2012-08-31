@@ -4,14 +4,14 @@ import psutil
 import argparse
 
 def limit_memory(limit):
+    # Do nothing if no limit
+    if limit is None:
+        return
     # Limits are not supported on systems that cannot impose them
     try:
         import resource
     except ImportError:
         logger.warn('Resource limits are not supported on this system.')
-        return
-    # Do nothing if no limit
-    if limit is None:
         return
     # Strip off and remember any lettered suffix
     if limit[-1] not in '0123456789':
@@ -27,6 +27,9 @@ def limit_memory(limit):
     resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
 
 def limit_cpu(limit):
+    # Do nothing if no limit
+    if limit is None:
+        return
     # Limits are not supported on systems that cannot impose them
     try:
         import resource
@@ -34,9 +37,6 @@ def limit_cpu(limit):
         logger.warn('Resource limits are not supported on this system.')
         return
     import re
-    # Do nothing if no limit
-    if limit is None:
-        return
     # Try h:m:s first
     matched = re.match(r'(\d+):(\d+):(\d+)', limit)
     if matched:
