@@ -2,9 +2,14 @@
 
 import psutil
 import argparse
-import re, resource
 
 def limit_memory(limit):
+    # Limits are not supported on systems that cannot impose them
+    try:
+        import resource
+    except ImportError:
+        logger.warn('Resource limits are not supported on this system.')
+        return
     # Do nothing if no limit
     if limit is None:
         return
@@ -22,6 +27,13 @@ def limit_memory(limit):
     resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
 
 def limit_cpu(limit):
+    # Limits are not supported on systems that cannot impose them
+    try:
+        import resource
+    except ImportError:
+        logger.warn('Resource limits are not supported on this system.')
+        return
+    import re
     # Do nothing if no limit
     if limit is None:
         return
