@@ -2,6 +2,43 @@
 
 import psutil
 import argparse
+import re, resource
+
+def limit_memory(limit):
+    # Do nothing if no limit
+    if limit is None:
+        return
+    # Strip off and remember any lettered suffix
+    if limit[-1] not in '0123456789':
+        mul = limit[-1].lower()
+        limit = float(limit[:-1])
+    else:
+        mul = ''
+        limit = int(limit)
+    # Apply multipliers
+    multipliers = { '': 1, 'k': 1024, 'm': 1048576, 'g': 1073741824 }
+    limit = int(limit * multipliers[mul])
+    logger.info("Memory limit in bytes: %d" % limit)
+    resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
+
+def limit_cpu(limit):
+    # Do nothing if no limit
+    if limit is None:
+        return
+    # Try h:m:s first
+    matched = re.match(r'(\d+):(\d+):(\d+)', limit)
+    if matched:
+        seconds = (int(matched.group(1)) * 60 + int(matched.group(2))) * 60 + int(matched.group(3))
+    else:
+        # Then try h:m
+        matched = re.match(r'(\d+):(\d+)', limit)
+        if matched:
+            seconds = int(matched.group(1)) * 60 + int(matched.group(2))
+        else:
+            # Else it's just seconds
+            seconds = int(limit)
+    logger.info('CPU limit in seconds: %d' % seconds)
+    resource.setrlimit(resource.RLIMIT_CPU, (seconds, seconds))
 
 # First off, read the arguments
 parser = argparse.ArgumentParser(description='Run qless workers.')
@@ -28,13 +65,20 @@ parser.add_argument('-r', '--resume', default=False, action='store_true',
     help='Try to resume jobs when the worker agent is restarted')
 parser.add_argument('-v', '--verbose', default=False, action='store_true',
     help='Be extra talkative')
-
+parser.add_argument('--memory', default=None, type=str,
+    help='Per-worker memory usage limit (can be suffixed with k, m, or g)')
+parser.add_argument('--cpu', default=None, type=str,
+    help='Per-worker CPU time usage limit ([[hh:]mm:]ss)')
 args = parser.parse_args()
 
 import os
 import sys
 import qless
 from qless import logger
+
+# Impose resource limits
+limit_memory(args.memory)
+limit_cpu(args.cpu)
 
 # Now let's add each of the paths to the python search path
 sys.path = [os.path.abspath(p) for p in args.path] + sys.path
