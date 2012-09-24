@@ -398,6 +398,32 @@ class TestRecurring(TestQless):
         time.advance(110)
         self.assertNotEqual(self.q.peek(), None)
 
+    def test_jid_counter(self):
+        # When we re-recur a job, it should not reset the jid counter
+        jid = self.q.recur(qless.Job, {'test': 'test_jid_counter'}, 10,
+            jid='my_recurring_job')
+        job = self.q.pop()
+        time.freeze()
+        jid = self.q.recur(qless.Job, {'test': 'test_jid_counter'}, 10,
+            jid='my_recurring_job')
+        time.advance(15)
+        self.assertNotEqual(self.q.pop().jid, job.jid)
+
+    def test_idempotent_recur(self):
+        # When we re-recur a job, it should update the attributes
+        jid = self.q.recur(qless.Job, {'test': 'test_idempotent_recur'}, 10,
+            jid='my_recurring_job', priority=10, tags=['foo'], retries=5)
+        # Now, let's /re-recur/ the thing, and make sure that its properties
+        # have indeed updated as expected
+        jid = self.q.recur(qless.Job, {'test': 'test_idempotent_recur_2'}, 20,
+            jid='my_recurring_job', priority=20, tags=['bar'], retries=10)
+        job = self.client.jobs[jid]
+        self.assertEqual(job.data['test'], 'test_idempotent_recur_2')
+        self.assertEqual(job.interval, 20)
+        self.assertEqual(job.priority, 20)
+        self.assertEqual(job.retries, 10)
+        self.assertEqual(job.tags, ['bar'])
+
 class TestDependencies(TestQless):
     def test_depends_put(self):
         # In this test, we want to put a job, and put a second job
@@ -935,7 +961,8 @@ class TestEverything(TestQless):
         # when we try to get it again, it doesn't exist
         del config['testing']
         self.assertEqual(config['testing'], None)
-    
+        self.assertRaises(AttributeError, config.__getattr__, 'foo')
+
     def test_put_get(self):
         # In this test, I want to make sure that I can put a job into
         # a queue, and then retrieve its data
@@ -2185,6 +2212,7 @@ class TestEverything(TestQless):
         self.assertRaises(Exception, recur, *([], ['tag']))
         self.assertRaises(Exception, recur, *([], ['untag']))
         # Malformed priority, interval, retries, data
+        jid = self.q.recur(qless.Job, {}, 10, jid=12345)
         self.assertRaises(Exception, recur, *([], ['update', 12345, 'priority', 'foo']))
         self.assertRaises(Exception, recur, *([], ['update', 12345, 'interval', 'foo']))
         self.assertRaises(Exception, recur, *([], ['update', 12345, 'retries', 'foo']))
