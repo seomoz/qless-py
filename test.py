@@ -270,7 +270,38 @@ class TestRecurring(TestQless):
         jid = self.q.recur(qless.Job, {'test':'test_passed_interval'}, interval=100)
         self.assertEqual(self.q.pop().complete(), 'complete')
         time.advance(850)
-        self.assertEqual(len(self.q.pop(100)), 8)
+        jobs = self.q.pop(100)
+        self.assertEqual(len(jobs), 8)
+        for job in jobs:
+            job.complete()
+
+        # If we are popping fewer jobs than the number of jobs that would have
+        # been scheduled, it should only make that many available
+        time.advance(800)
+        jobs = self.q.pop(5)
+        self.assertEqual(len(jobs), 5)
+        self.assertEqual(len(self.q), 5)
+        for job in jobs:
+            job.complete()
+
+        # Even if there are several recurring jobs, both of which need jobs
+        # scheduled, it only pops off the needed number
+        jid = self.q.recur(qless.Job, {'test': 'test_passed_interval_2'}, 10)
+        time.advance(500)
+        jobs = self.q.pop(5)
+        self.assertEqual(len(jobs), 5)
+        self.assertEqual(len(self.q), 5)
+        for job in jobs:
+            job.complete()
+
+        # And if there are other jobs that are there, it should only move over
+        # as many recurring jobs as needed
+        jid = self.q.put(qless.Job, {'foo': 'bar'}, priority = 10)
+        jobs = self.q.pop(5)
+        self.assertEqual(len(jobs), 5)
+        # Not sure why this is 6, but it's not a huge deal in my opinion
+        self.assertEqual(len(self.q), 6)
+
     
     def test_queues_endpoint(self):
         # We should see these recurring jobs crop up under queues when 
@@ -397,6 +428,38 @@ class TestRecurring(TestQless):
         self.assertEqual(self.q.peek(), None)
         time.advance(110)
         self.assertNotEqual(self.q.peek(), None)
+        self.q.pop().complete()
+
+        # If we are popping fewer jobs than the number of jobs that would have
+        # been scheduled, it should only make that many available
+        time.advance(800)
+        jobs = self.q.peek(5)
+        self.assertEqual(len(jobs), 5)
+        self.assertEqual(len(self.q), 5)
+        for job in self.q.pop(100):
+            job.complete()
+        self.assertEqual(len(self.q), 0)
+
+        # Even if there are several recurring jobs, both of which need jobs
+        # scheduled, it only pops off the needed number
+        jid = self.q.recur(qless.Job, {'test': 'test_peek'}, interval = 10)
+        time.advance(800)
+        jobs = self.q.peek(5)
+        self.assertEqual(len(jobs), 5)
+        self.assertEqual(len(self.q), 5)
+        for job in self.q.pop(100):
+            job.complete()
+        self.assertEqual(len(self.q), 0)
+
+        # And if there are other jobs that are there, it should only move over
+        # as many recurring jobs as needed
+        time.advance(800)
+        jid = self.q.put(qless.Job, {'foo': 'bar'}, priority=10)
+        jobs = self.q.peek(5)
+        self.assertEqual(len(jobs), 5)
+        # Not sure why this is 6, but it's not a huge deal in my opinion
+        self.assertEqual(len(self.q), 6)
+
 
     def test_jid_counter(self):
         # When we re-recur a job, it should not reset the jid counter
@@ -716,6 +779,18 @@ class TestRetry(TestQless):
         self.assertEqual(self.client.workers[self.client.worker_name], {'jobs': [jid], 'stalled': []})
         self.assertEqual(job.retry(), 4)
         self.assertEqual(self.client.workers[self.client.worker_name], {'jobs': [], 'stalled': []})
+
+    def test_retry_complete(self):
+        # We shouldn't be able to complete a job that has been selected for
+        # retry
+        jid = self.q.put(qless.Job, {'test': 'test_retry_complete'})
+        job = self.q.pop()
+        job.retry()
+        self.assertEqual(job.complete(), False)
+        self.assertEqual(job.retry(), False)
+        job = self.client.jobs[jid]
+        self.assertEqual(job.state, 'waiting')
+
 
 class TestPriority(TestQless):
     # Basically all we need to test:
