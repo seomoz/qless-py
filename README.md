@@ -155,7 +155,7 @@ Great! With all this in place, let's put them in the queue so that they can get 
 
 Now, reference a queue, and start putting your gnomes to work:
 
-	queue = client.queue('underpants')
+	queue = client.queues['underpants']
 	
 	import gnomes
 	for i in range(1000):
@@ -238,7 +238,7 @@ first pass, and enqueue a single job while the worker is running:
 	# In another terminal...
 	>>> import qless
 	>>> import awesomeproject
-	>>> qless.client().queue('foo').put(awesomeproject.Job, {'key': 'value'))
+	>>> qless.client().queues['foo'].put(awesomeproject.Job, {'key': 'value'))
 
 From there, I watch the output on the worker, adjust my job class, save it, watch again, etc.,
 but __without restarting the worker__ -- in general it shouldn't be necessary to restart the
