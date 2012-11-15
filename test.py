@@ -487,6 +487,29 @@ class TestRecurring(TestQless):
         self.assertEqual(job.retries, 10)
         self.assertEqual(job.tags, ['bar'])
 
+    def test_reput(self):
+        # If a recurring job exits, and you try to put it into the queue again,
+        # then it should behave as a 'move'
+        jid = self.q.recur(qless.Job, {'test': 'test_recur_update'}, 10,
+            jid='my_recurring_job')
+        counts = self.client.queues.counts
+        stats = [c for c in counts if c['name'] == self.q.name]
+        self.assertEqual(len(stats), 1)
+        self.assertEqual(stats[0]['recurring'], 1)
+        
+        # And we'll reput it into another queue
+        jid = self.other.recur(qless.Job, {'test': 'test_recur_update'}, 10,
+            jid='my_recurring_job')
+        counts = self.client.queues.counts
+        stats = [c for c in counts if c['name'] == self.q.name]
+        self.assertEqual(len(stats), 1)
+        self.assertEqual(stats[0]['recurring'], 0)
+        # Make sure it's in the queue
+        counts = self.client.queues.counts
+        stats = [c for c in counts if c['name'] == self.other.name]
+        self.assertEqual(len(stats), 1)
+        self.assertEqual(stats[0]['recurring'], 1)
+
 class TestDependencies(TestQless):
     def test_depends_put(self):
         # In this test, we want to put a job, and put a second job
