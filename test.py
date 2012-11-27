@@ -72,6 +72,8 @@ class TestEvents(TestQless):
         self.tracked.track()
         self.events    = defaultdict(set)
         self.pubsub    = qless.client(socket_timeout=0.01)
+        # We need to make sure this gets lazily loaded first in this thread
+        self.pubsub.events
         self.t         = threading.Thread(target=self._listen)
     
     def tearDown(self):
