@@ -1,21 +1,10 @@
 #! /usr/bin/env python
 
-try:
-    from setuptools import setup
-    extra = {
-        'install_requires' : [
-            'argparse', 'hiredis', 'redis', 'psutil', 'simplejson']
-    }
-except ImportError:
-    from distutils.core import setup
-    extra = {
-        'dependencies' : [
-            'argparse', 'hiredis', 'redis', 'psutil', 'simplejson']
-    }
+from distutils.core import setup
 
 setup(
     name                 = 'qless-py',
-    version              = '0.9.3',
+    version              = '0.9.4',
     description          = 'Redis-based Queue Management',
     long_description     = '''
 Redis-based queue management, with heartbeating, job tracking,
@@ -29,16 +18,17 @@ stats, notifications, and a whole lot more.
     packages             = ['qless'],
     package_dir          = {'qless': 'qless'},
     package_data         = {'qless': ['qless-core/*.lua']},
-    scripts              = ['bin/qless-py-worker'],
     include_package_data = True,
+    scripts              = ['bin/qless-py-worker'],
     extras_require       = {
         'ps': ['setproctitle']
     },
+    install_requires     = [
+        'argparse', 'hiredis', 'redis', 'psutil', 'simplejson'],
     classifiers          = [
         'License :: OSI Approved :: MIT License',
     	'Programming Language :: Python',
     	'Intended Audience :: Developers',
     	'Operating System :: OS Independent'
-    ],
-    **extra
+    ]
 )

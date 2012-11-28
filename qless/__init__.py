@@ -166,7 +166,7 @@ class client(object):
         for cmd in [
             'cancel', 'config', 'complete', 'depends', 'fail', 'failed', 'get',
             'heartbeat', 'jobs', 'peek', 'pop', 'priority', 'put', 'queues',
-            'recur', 'retry', 'stats', 'tag', 'track', 'workers']:
+            'recur', 'retry', 'stats', 'tag', 'track', 'unfail', 'workers']:
             setattr(self, '_%s' % cmd, lua(cmd, self.redis))
 
     def __getattr__(self, key):
@@ -196,6 +196,10 @@ class client(object):
         '''Listen indefinitely for all events'''
         while True:
             self.event(*args, **kwargs)
+
+    def unfail(self, group, queue, count=500):
+        '''Move jobs from the failed group to the provided queue'''
+        return self._unfail([], [repr(time.time()), group, queue, count])
 
 from .lua import lua
 from .job import Job, RecurringJob

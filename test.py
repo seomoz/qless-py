@@ -1047,6 +1047,25 @@ class TestFail(TestQless):
         self.assertEqual(job.complete(), 'complete')
         self.assertEqual(self.client.jobs[jid].failure, {})
 
+    def test_unfail(self):
+        # We should be able to unfail jobs in batch. First, fail a large number
+        # of jobs, and then unfail some of them. Make sure that those jobs have
+        # indeed moved, all the remaining failed jobs are still failed, and
+        # that the new jobs can be popped and work like they should
+        jids = [self.q.put(qless.Job, {'test': 'test_unfail'})
+            for i in range(1000)]
+        self.assertEqual(len(
+            [job.fail('foo', 'bar') for job in self.q.pop(1000)]), 1000)
+        self.assertEqual(self.client.unfail('foo', self.q.name, 25), 25)
+        self.assertEqual(self.client.jobs.failed()['foo'], 975)
+        failed = self.client.jobs.failed('foo', 0, 1000)['jobs']
+        self.assertEqual(set([j.jid for j in failed]), set(jids[25:]))
+
+        # Now make sure that they can be popped off and completed correctly
+        self.assertEqual(
+            [j.complete() for j in self.q.pop(1000)],
+            ['complete'] * 25)
+
 class TestEverything(TestQless):    
     def test_config(self):
         # Set this particular configuration value
