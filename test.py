@@ -178,7 +178,28 @@ class TestRecurring(TestQless):
         time.advance(2)
         self.assertNotEqual(self.q.pop(), None)
         time.unfreeze()
-    
+
+    def test_recur_on_by_string(self):
+        time.freeze()
+        self.q.recur('qless.Job', {'test':'test_recur_on'}, interval=1800)
+        self.assertEqual(self.q.pop().complete(), 'complete')
+        self.assertEqual(self.q.pop(), None)
+        time.advance(1799)
+        self.assertEqual(self.q.pop(), None)
+        time.advance(2)
+        job = self.q.pop()
+        self.assertNotEqual(job, None)
+        self.assertEqual(job.data, {'test':'test_recur_on'})
+        job.complete()
+        # We should not be able to pop a second job
+        self.assertEqual(self.q.pop(), None)
+        # Let's advance almost to the next one, and then check again
+        time.advance(1798)
+        self.assertEqual(self.q.pop(), None)
+        time.advance(2)
+        self.assertNotEqual(self.q.pop(), None)
+        time.unfreeze()
+
     def test_recur_attributes(self):
         # Popped jobs should have the same priority, tags, etc. that the
         # recurring job has
@@ -2433,10 +2454,18 @@ class TestPython(TestQless):
         self.assertRaises(AttributeError, lambda: job.foo)
         job['testing'] = 'foo'
         self.assertEqual(job['testing'], 'foo')
+       
+    def test_job_by_string(self):
+        job = self.client.jobs[self.q.put('test.BarJob', {})]
+        self.assertTrue(job.jid in str(job))
+        self.assertTrue(job.jid in repr(job))
+        self.assertRaises(AttributeError, lambda: job.foo)
+        job['testing'] = 'foo'
+        self.assertEqual(job['testing'], 'foo')
     
     def test_queue(self):
         self.assertRaises(AttributeError, lambda: self.q.foo)
-    
+ 
     def test_process(self):
         jid = self.q.put(BarJob, {})
         self.q.pop().process()
