@@ -49,7 +49,12 @@ class Queue(object):
             self.client.config[self.name + '-heartbeat'] = value
         else:
             object.__setattr__(self, key, value)
-    
+   
+    def class_string(self, klass):
+        if type(klass) == str:
+            return klass
+        return klass.__module__ + '.' + klass.__name__
+ 
     def put(self, klass, data, priority=None, tags=None, delay=None, retries=None, jid=None, depends=None):
         '''Either create a new job in the provided queue with the provided attributes,
         or move that job into that queue. If the job is being serviced by a worker,
@@ -63,7 +68,7 @@ class Queue(object):
         actionable.'''
         return self.client._put([self.name], [
             jid or uuid.uuid4().hex,
-            klass.__module__ + '.' + klass.__name__,
+            self.class_string(klass),
             json.dumps(data),
             repr(time.time()),
             delay or 0,
@@ -76,7 +81,7 @@ class Queue(object):
     def recur(self, klass, data, interval, offset=0, priority=None, tags=None, retries=None, jid=None):
         return self.client._recur([], ['on', self.name,
             jid or uuid.uuid4().hex,
-            klass.__module__ + '.' + klass.__name__,
+            self.class_string(klass),
             json.dumps(data),
             repr(time.time()),
             'interval', interval, offset,
