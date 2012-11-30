@@ -51,7 +51,7 @@ class Queue(object):
             object.__setattr__(self, key, value)
    
     def class_string(self, klass):
-        if type(klass) == str:
+        if isinstance(klass,basestring):
             return klass
         return klass.__module__ + '.' + klass.__name__
  

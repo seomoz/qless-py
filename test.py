@@ -2462,6 +2462,14 @@ class TestPython(TestQless):
         self.assertRaises(AttributeError, lambda: job.foo)
         job['testing'] = 'foo'
         self.assertEqual(job['testing'], 'foo')
+ 
+    def test_job_by_unicode(self):
+        job = self.client.jobs[self.q.put(u'test.BarJob', {})]
+        self.assertTrue(job.jid in str(job))
+        self.assertTrue(job.jid in repr(job))
+        self.assertRaises(AttributeError, lambda: job.foo)
+        job['testing'] = 'foo'
+        self.assertEqual(job['testing'], 'foo')
     
     def test_queue(self):
         self.assertRaises(AttributeError, lambda: self.q.foo)
