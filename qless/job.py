@@ -189,9 +189,11 @@ class Job(BaseJob):
     def heartbeat(self):
         '''Renew the heartbeat, if possible, and optionally update the job's
         user data.'''
+        logger.debug('Heartbeating %s (ttl = %s)' % (self.jid, self.ttl))
         self.expires_at = float(self.client._heartbeat([], [self.jid,
             self.client.worker_name, repr(time.time()),
             json.dumps(self.data)]) or 0)
+        logger.debug('Heartbeated %s (ttl = %s)' % (self.jid, self.ttl))
         return self.expires_at
 
     def fail(self, group, message):
