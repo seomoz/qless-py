@@ -77,6 +77,8 @@ parser.add_argument('-r', '--resume', default=False, action='store_true',
     help='Try to resume jobs when the worker agent is restarted')
 parser.add_argument('-v', '--verbose', default=False, action='store_true',
     help='Be extra talkative')
+parser.add_argument('-l', '--logger', default=False, type=str,
+    help='Log out to this file')
 parser.add_argument('--memory', default=None, type=str,
     help='Per-worker memory usage limit (can be suffixed with k, m, or g)')
 parser.add_argument('--cpu', default=None, type=str,
@@ -98,6 +100,12 @@ sys.path = [os.path.abspath(p) for p in args.path] + sys.path
 if args.verbose:
     import logging
     logger.setLevel(logging.DEBUG)
+
+if args.logger:
+    import logging
+    handler = logging.FileHandler(args.logger)
+    handler.setLevel(logging.DEBUG)
+    logger.addHandler(handle)
 
 # Now let's import all the modules and packages we've been asked to import
 for i in getattr(args, 'import'):
