@@ -6,6 +6,7 @@ import qless
 import redis
 import unittest
 import time as _time
+from qless.exceptions import LostLockException
 
 class FooJob(qless.Job):
     pass
@@ -1013,7 +1014,7 @@ class TestFail(TestQless):
         self.assertNotEqual(job, None)
         job.fail('foo', 'Some sort of message')
         self.assertEqual(len(self.q), 0)
-        self.assertEqual(job.heartbeat(), False)
+        self.assertRaises(LostLockException, job.heartbeat)
         self.assertEqual(job.complete() , False)
         self.assertEqual(self.client.jobs.failed(), {
             'foo': 1
@@ -1302,7 +1303,7 @@ class TestEverything(TestQless):
         self.assertNotEqual(job, None)
         # Now move it
         job.move('other')
-        self.assertEqual(job.heartbeat(), False)
+        self.assertRaises(LostLockException, job.heartbeat)
     
     def test_move_non_destructive(self):
         # In this test, we want to verify that if we move a job
@@ -1375,7 +1376,7 @@ class TestEverything(TestQless):
         self.assertEqual(len(self.q), 0, 'Start with an empty queue')
         jid = self.q.put(qless.Job, {'test': 'heartbeat_state'})
         job = self.client.jobs[jid]
-        self.assertEqual(job.heartbeat(), False)
+        self.assertRaises(LostLockException, job.heartbeat)
     
     def test_peek_pop_empty(self):
         # Make sure that we can safely pop from an empty queue
@@ -1431,7 +1432,7 @@ class TestEverything(TestQless):
         self.assertEqual(ajob.jid, bjob.jid)
         self.assertTrue(isinstance(bjob.heartbeat(), float))
         self.assertTrue((bjob.heartbeat() + 11) >= time.time())
-        self.assertEqual(ajob.heartbeat(), False)
+        self.assertRaises(LostLockException, ajob.heartbeat)
     
     def test_locks_workers(self):
         # When a worker loses a lock on a job, that job should be removed
@@ -1486,7 +1487,7 @@ class TestEverything(TestQless):
         job = self.q.pop()
         job.cancel()
         self.assertEqual(len(self.q), 0)
-        self.assertEqual(job.heartbeat(), False)
+        self.assertRaises(LostLockException, job.heartbeat)
         self.assertEqual(job.complete() , False)
         self.assertEqual(self.client.jobs[jid], None)
     

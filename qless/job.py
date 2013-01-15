@@ -6,6 +6,7 @@ import types
 import traceback
 from qless import logger
 import simplejson as json
+from qless.exceptions import LostLockException
 
 class BaseJob(object):
     '''This is a dictionary of all the classes that we've seen, and
@@ -193,6 +194,8 @@ class Job(BaseJob):
         self.expires_at = float(self.client._heartbeat([], [self.jid,
             self.client.worker_name, repr(time.time()),
             json.dumps(self.data)]) or 0)
+        if self.expires_at == 0.0:
+            raise LostLockException(self.jid)
         logger.debug('Heartbeated %s (ttl = %s)' % (self.jid, self.ttl))
         return self.expires_at
 
