@@ -4,12 +4,11 @@ from distutils.core import setup
 
 setup(
     name                 = 'qless-py',
-    version              = '0.9.4',
+    version              = '0.10.0',
     description          = 'Redis-based Queue Management',
     long_description     = '''
 Redis-based queue management, with heartbeating, job tracking,
-stats, notifications, and a whole lot more.
-    ''',
+stats, notifications, and a whole lot more.''',
     url                  = 'http://github.com/seomoz/qless-py',
     author               = 'Dan Lecocq',
     author_email         = 'dan@seomoz.org',
@@ -27,8 +26,8 @@ stats, notifications, and a whole lot more.
         'argparse', 'hiredis', 'redis', 'psutil', 'simplejson'],
     classifiers          = [
         'License :: OSI Approved :: MIT License',
-    	'Programming Language :: Python',
-    	'Intended Audience :: Developers',
-    	'Operating System :: OS Independent'
+        'Programming Language :: Python',
+        'Intended Audience :: Developers',
+        'Operating System :: OS Independent'
     ]
 )

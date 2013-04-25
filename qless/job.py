@@ -1,12 +1,15 @@
 #! /usr/bin/env python
 
+'''Both the regular Job and RecurringJob classes'''
+
 import os
 import time
 import types
 import traceback
 from qless import logger
 import simplejson as json
-from qless.exceptions import LostLockException
+from qless.exceptions import LostLockException, QlessException
+
 
 class BaseJob(object):
     '''This is a dictionary of all the classes that we've seen, and
@@ -16,17 +19,18 @@ class BaseJob(object):
 
     def __init__(self, client, **kwargs):
         self.client = client
-        for att in ['data', 'jid', 'priority']:
+        for att in ['jid', 'priority']:
             object.__setattr__(self, att, kwargs[att])
         object.__setattr__(self, 'klass_name', kwargs['klass'])
         object.__setattr__(self, 'queue_name', kwargs['queue'])
         # Because of how Lua parses JSON, empty tags comes through as {}
-        object.__setattr__(self, 'tags'      , kwargs['tags'] or [])
+        object.__setattr__(self, 'tags', kwargs['tags'] or [])
+        object.__setattr__(self, 'data', json.loads(kwargs['data']))
 
     def __setattr__(self, key, value):
         if key == 'priority':
-            return self.client._priority([],
-                [self.jid, value]) and object.__setattr__(self, key, value)
+            return self.client('priority', self.jid, value
+                ) and object.__setattr__(self, key, value)
         else:
             return object.__setattr__(self, key, value)
 
@@ -44,6 +48,11 @@ class BaseJob(object):
             self.__class__.__module__ + '.' + self.__class__.__name__, key))
 
     @staticmethod
+    def reload(klass):
+        '''Force a reload of this klass on next import'''
+        BaseJob._loaded[klass] = 0
+
+    @staticmethod
     def _import(klass):
         '''1) Get a reference to the module
            2) Check the file that module's imported from
@@ -53,12 +62,14 @@ class BaseJob(object):
         for segment in klass.split('.')[1:-1]:
             mod = getattr(mod, segment)
 
-        # Alright, now check the file associated with it
-        mtime = os.stat(mod.__file__).st_mtime
-        BaseJob._loaded[klass] = min(BaseJob._loaded.get(klass, 1e20),
-            time.time())
-        if BaseJob._loaded[klass] < mtime:
-            mod = reload(mod)
+        # Alright, now check the file associated with it. Note that clases
+        # defined in __main__ don't have a __file__ attribute
+        if klass not in BaseJob._loaded:
+            BaseJob._loaded[klass] = time.time()
+        if hasattr(mod, '__file__'):
+            mtime = os.stat(mod.__file__).st_mtime
+            if BaseJob._loaded[klass] < mtime:
+                mod = reload(mod)
 
         return getattr(mod, klass.rpartition('.')[2])
 
@@ -66,17 +77,16 @@ class BaseJob(object):
         '''Cancel a job. It will be deleted from the system, the thinking
         being that if you don't want to do any work on it, it shouldn't be in
         the queueing system.'''
-        return self.client._cancel([], [self.jid])
+        return self.client('cancel', self.jid)
 
     def tag(self, *tags):
         '''Tag a job with additional tags'''
-        return self.client._tag([], ['add', self.jid,
-            repr(time.time())] + list(tags))
+        return self.client('tag', 'add', self.jid, *tags)
 
     def untag(self, *tags):
         '''Remove tags from a job'''
-        return self.client._tag([], ['remove', self.jid,
-            repr(time.time())] + list(tags))
+        return self.client('tag', 'remove', self.jid, *tags)
+
 
 class Job(BaseJob):
     '''The Job class'''
@@ -119,12 +129,12 @@ class Job(BaseJob):
         ``testing``, then this would invoke the ``testing`` staticmethod of
         your class.'''
         try:
-            method = getattr(self.klass, self.queue_name, getattr(self.klass,
-                'process', None))
+            method = getattr(self.klass, self.queue_name,
+                getattr(self.klass, 'process', None))
         except Exception as exc:
             # We failed to import the module containing this class
             logger.exception('Failed to import %s' % self.klass_name)
-            self.fail(self.queue_name + '-' + exc.__class__.__name__,
+            return self.fail(self.queue_name + '-' + exc.__class__.__name__,
                 'Failed to import %s' % self.klass_name)
 
         if method:
@@ -135,11 +145,11 @@ class Job(BaseJob):
                     method(self)
                     logger.info('Completed %s in %s' % (
                         self.jid, self.queue_name))
-                except Exception as e:
+                except Exception as exc:
                     # Make error type based on exception type
                     logger.exception('Failed %s in %s: %s' % (
                         self.jid, self.queue_name, repr(method)))
-                    self.fail(self.queue_name + '-' + e.__class__.__name__,
+                    self.fail(self.queue_name + '-' + exc.__class__.__name__,
                         traceback.format_exc())
             else:
                 # Or fail with a message to that effect
@@ -161,40 +171,34 @@ class Job(BaseJob):
         delay, and dependencies'''
         logger.info('Moving %s to %s from %s' % (
             self.jid, queue, self.queue_name))
-        return self.client._put([queue], [
-            self.jid,
-            self.klass_name,
-            json.dumps(self.data),
-            repr(time.time()),
-            delay,
-            'depends', json.dumps(depends or [])
-        ])
+        return self.client('put', queue, self.jid, self.klass_name,
+            json.dumps(self.data), delay, 'depends', json.dumps(depends or [])
+        )
 
-    def complete(self, next=None, delay=None, depends=None):
+    def complete(self, nextq=None, delay=None, depends=None):
         '''Turn this job in as complete, optionally advancing it to another
         queue. Like ``Queue.put`` and ``move``, it accepts a delay, and
         dependencies'''
-        if next:
+        if nextq:
             logger.info('Advancing %s to %s from %s' % (
-                self.jid, next, self.queue_name))
-            return self.client._complete([], [self.jid,
-                self.client.worker_name, self.queue_name, repr(time.time()),
-                json.dumps(self.data), 'next', next, 'delay', delay or 0,
-                'depends', json.dumps(depends or [])]) or False
+                self.jid, nextq, self.queue_name))
+            return self.client('complete', self.jid, self.client.worker_name,
+                self.queue_name, json.dumps(self.data), 'next', nextq,
+                'delay', delay or 0, 'depends', json.dumps(depends or [])
+            ) or False
         else:
             logger.info('Completing %s' % self.jid)
-            return self.client._complete([], [self.jid,
-                self.client.worker_name, self.queue_name, repr(time.time()),
-                json.dumps(self.data)]) or False
+            return self.client('complete', self.jid, self.client.worker_name,
+                self.queue_name, json.dumps(self.data)) or False
 
     def heartbeat(self):
         '''Renew the heartbeat, if possible, and optionally update the job's
         user data.'''
         logger.debug('Heartbeating %s (ttl = %s)' % (self.jid, self.ttl))
-        self.expires_at = float(self.client._heartbeat([], [self.jid,
-            self.client.worker_name, repr(time.time()),
-            json.dumps(self.data)]) or 0)
-        if self.expires_at == 0.0:
+        try:
+            self.expires_at = float(self.client('heartbeat', self.jid,
+            self.client.worker_name, json.dumps(self.data)) or 0)
+        except QlessException:
             raise LostLockException(self.jid)
         logger.debug('Heartbeated %s (ttl = %s)' % (self.jid, self.ttl))
         return self.expires_at
@@ -218,30 +222,27 @@ class Job(BaseJob):
         completed. __Returns__ the id of the failed job if successful, or
         `False` on failure.'''
         logger.warn('Failing %s (%s): %s' % (self.jid, group, message))
-        return self.client._fail([], [self.jid, self.client.worker_name, group,
-            message, repr(time.time()), json.dumps(self.data)]) or False
+        return self.client('fail', self.jid, self.client.worker_name, group,
+            message, json.dumps(self.data)) or False
 
     def track(self):
         '''Begin tracking this job'''
-        return self.client._track([], ['track', self.jid, repr(time.time())])
+        return self.client('track', 'track', self.jid)
 
     def untrack(self):
         '''Stop tracking this job'''
-        return self.client._track([], ['untrack', self.jid, repr(time.time())])
+        return self.client('track', 'untrack', self.jid)
 
     def retry(self, delay=0):
         '''Retry this job in a little bit, in the same queue. This is meant
         for the times when you detect a transient failure yourself'''
-        result = self.client._retry([], [self.jid, self.queue_name,
-            self.worker_name, repr(time.time()), delay])
-        if result == None:
-            return False
-        return result
+        return self.client('retry', self.jid, self.queue_name,
+            self.worker_name, delay)
 
     def depend(self, *args):
         '''If and only if a job already has other dependencies, this will add
         more jids to the list of this job's dependencies.'''
-        return self.client._depends([], [self.jid, 'on'] + list(args)) or False
+        return self.client('depends', self.jid, 'on', *args) or False
 
     def undepend(self, *args, **kwargs):
         '''Remove specific (or all) job dependencies from this job:
@@ -249,32 +250,34 @@ class Job(BaseJob):
             job.remove(jid1, jid2)
             job.remove(all=True)'''
         if kwargs.get('all', False):
-            return self.client._depends([], [self.jid, 'off', 'all']) or False
+            return self.client('depends', self.jid, 'off', 'all') or False
         else:
-            return self.client._depends([], [
-                self.jid, 'off'] +list(args)) or False
+            return self.client('depends', self.jid, 'off', *args) or False
+
 
 class RecurringJob(BaseJob):
     '''Recurring Job object'''
     def __init__(self, client, **kwargs):
-        for att in ['data', 'jid', 'priority', 'tags',
+        BaseJob.__init__(self, client, **kwargs)
+        for att in ['jid', 'priority', 'tags',
             'retries', 'interval', 'count']:
             object.__setattr__(self, att, kwargs[att])
         object.__setattr__(self, 'client', client)
         object.__setattr__(self, 'klass_name', kwargs['klass'])
         object.__setattr__(self, 'queue_name', kwargs['queue'])
         object.__setattr__(self, 'tags', self.tags or [])
+        object.__setattr__(self, 'data', json.loads(kwargs['data']))
 
     def __setattr__(self, key, value):
         if key in ('priority', 'retries', 'interval'):
-            return self.client._recur([], ['update', self.jid, key, value]
+            return self.client('recur.update', self.jid, key, value
                 ) and object.__setattr__(self, key, value)
         if key == 'data':
-            return self.client._recur([], ['update', self.jid, key,
-                json.dumps(value)]) and object.__setattr__(self, 'data', value)
+            return self.client('recur.update', self.jid, key, json.dumps(value)
+                ) and object.__setattr__(self, 'data', value)
         if key == 'klass':
             name = value.__module__ + '.' + value.__name__
-            return self.client._recur([], ['update', self.jid, 'klass', name]
+            return self.client('recur.update', self.jid, 'klass', name
                 ) and object.__setattr__(self, 'klass_name', name
                 ) and object.__setattr__(self, 'klass', value)
         return object.__setattr__(self, key, value)
@@ -288,16 +291,16 @@ class RecurringJob(BaseJob):
 
     def move(self, queue):
         '''Make this recurring job attached to another queue'''
-        return self.client._recur([], ['update', self.jid, 'queue', queue])
+        return self.client('recur.update', self.jid, 'queue', queue)
 
     def cancel(self):
         '''Cancel all future recurring jobs'''
-        self.client._recur([], ['off', self.jid])
+        self.client('unrecur', self.jid)
 
     def tag(self, *tags):
         '''Add tags to this recurring job'''
-        return self.client._recur([], ['tag', self.jid] + list(tags))
+        return self.client('recur.tag', self.jid, *tags)
 
     def untag(self, *tags):
         '''Remove tags from this job'''
-        return self.client._recur([], ['untag', self.jid] + list(tags))
+        return self.client('recur.untag', self.jid, *tags)

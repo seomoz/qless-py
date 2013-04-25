@@ -3,6 +3,11 @@
 '''Some exception classes'''
 
 
-class LostLockException(Exception):
+class QlessException(Exception):
+    '''Any and all qless exceptions'''
+    pass
+
+
+class LostLockException(QlessException):
     '''Lost lock on a job'''
     pass
