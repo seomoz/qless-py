@@ -202,7 +202,7 @@ class client(object):
         try:
             return self._lua(keys=[], args=lua_args)
         except redis.ResponseError as exc:
-            raise QlessException(exc.message)
+            raise QlessException(str(exc))
 
     def track(self, jid):
         '''Begin tracking this job'''

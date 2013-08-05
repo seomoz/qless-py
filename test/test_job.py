@@ -65,8 +65,8 @@ class TestJob(TestQless):
         self.client.config['heartbeat'] = 10
         self.client.queues['foo'].put(Job, {}, jid='jid')
         self.client.queues['foo'].pop()
-        self.assertLess(self.client.jobs['jid'].ttl, 10)
-        self.assertGreater(self.client.jobs['jid'].ttl, 9)
+        self.assertTrue(self.client.jobs['jid'].ttl < 10)
+        self.assertTrue(self.client.jobs['jid'].ttl > 9)
 
     def test_attribute_error(self):
         '''Raises an attribute error for nonexistent attributes'''
@@ -125,7 +125,7 @@ class TestJob(TestQless):
         before = job.ttl
         self.client.config['heartbeat'] = 20
         job.heartbeat()
-        self.assertGreater(job.ttl, before)
+        self.assertTrue(job.ttl > before)
 
     def test_heartbeat_fail(self):
         '''Failed heartbeats raise an error'''
@@ -254,7 +254,7 @@ class TestRecurring(TestQless):
         self.client.queues['foo'].recur('Foo', {}, 60, jid='jid')
         nxt = self.client.jobs['jid'].next
         self.client.queues['foo'].pop()
-        self.assertLess(abs(self.client.jobs['jid'].next - nxt - 60), 1)
+        self.assertTrue(abs(self.client.jobs['jid'].next - nxt - 60) < 1)
 
     def test_attribute_error(self):
         '''Raises attribute errors for non-attributes'''

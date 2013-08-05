@@ -45,9 +45,9 @@ class TestConfig(TestQless):
 
     def test_contains(self):
         '''We can use the 'in' syntax'''
-        self.assertNotIn('foo', self.client.config)
+        self.assertFalse('foo' in self.client.config)
         self.client.config['foo'] = 5
-        self.assertIn('foo', self.client.config)
+        self.assertTrue('foo' in self.client.config)
 
     def test_iter(self):
         '''We can iterate over the config'''
@@ -56,15 +56,15 @@ class TestConfig(TestQless):
 
     def test_get(self):
         '''We can use dictionary-style get'''
-        self.assertNotIn('foo', self.client.config)
+        self.assertFalse('foo' in self.client.config)
         self.assertEqual(self.client.config.get('foo', 5), 5)
 
     def test_pop(self):
         '''We can use dictionary-style pop'''
-        self.assertNotIn('foo', self.client.config)
+        self.assertFalse('foo' in self.client.config)
         self.client.config['foo'] = 5
         self.assertEqual(self.client.config.pop('foo'), 5)
-        self.assertNotIn('foo', self.client.config)
+        self.assertFalse('foo' in self.client.config)
 
     def test_update(self):
         '''We can use dictionary-style update'''
