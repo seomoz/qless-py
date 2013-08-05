@@ -5,6 +5,8 @@ Qless is a powerful `Redis`-based job queueing system inspired by
 but built on a collection of Lua scripts, maintained in the
 [qless-core](https://github.com/seomoz/qless-core) repo.
 
+[![Build Status](https://travis-ci.org/seomoz/qless-py.png)](https://travis-ci.org/seomoz/qless-py)
+
 Philosophy and Nomenclature
 ===========================
 A `job` is a unit of work identified by a job id or `jid`. A `queue` can
