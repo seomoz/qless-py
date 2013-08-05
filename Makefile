@@ -7,6 +7,8 @@ clean:
 	find . -name .coverage | xargs rm
 
 nose:
+	# Ensure qless is built
+	make -C qless/qless-core/
 	rm -rf .coverage
 	nosetests --exe --cover-package=qless --with-coverage --cover-branches -v
 
