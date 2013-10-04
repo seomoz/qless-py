@@ -26,8 +26,7 @@ class TestWorker(TestQless):
     '''Test the worker'''
     def setUp(self):
         TestQless.setUp(self)
-        self.worker = ForkingWorker(['foo'], workers=1, interval=1)
-        self.client = qless.client()
+        self.worker = ForkingWorker(['foo'], self.client, workers=1, interval=1)
         self.queue = self.client.queues['foo']
         self.thread = None
 

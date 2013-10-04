@@ -3,104 +3,58 @@
 import psutil
 import argparse
 
-def limit_memory(limit):
-    # Do nothing if no limit
-    if limit is None:
-        return
-    # Limits are not supported on systems that cannot impose them
-    try:
-        import resource
-    except ImportError:
-        logger.warn('Resource limits are not supported on this system.')
-        return
-    # Strip off and remember any lettered suffix
-    if limit[-1] not in '0123456789':
-        mul = limit[-1].lower()
-        limit = float(limit[:-1])
-    else:
-        mul = ''
-        limit = int(limit)
-    # Apply multipliers
-    multipliers = { '': 1, 'k': 1024, 'm': 1048576, 'g': 1073741824 }
-    limit = int(limit * multipliers[mul])
-    logger.info("Memory limit in bytes: %d" % limit)
-    resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
-
-def limit_cpu(limit):
-    # Do nothing if no limit
-    if limit is None:
-        return
-    # Limits are not supported on systems that cannot impose them
-    try:
-        import resource
-    except ImportError:
-        logger.warn('Resource limits are not supported on this system.')
-        return
-    import re
-    # Try h:m:s first
-    matched = re.match(r'(\d+):(\d+):(\d+)', limit)
-    if matched:
-        seconds = (int(matched.group(1)) * 60 + int(matched.group(2))) * 60 + int(matched.group(3))
-    else:
-        # Then try h:m
-        matched = re.match(r'(\d+):(\d+)', limit)
-        if matched:
-            seconds = int(matched.group(1)) * 60 + int(matched.group(2))
-        else:
-            # Else it's just seconds
-            seconds = int(limit)
-    logger.info('CPU limit in seconds: %d' % seconds)
-    resource.setrlimit(resource.RLIMIT_CPU, (seconds, seconds))
-
 # First off, read the arguments
 parser = argparse.ArgumentParser(description='Run qless workers.')
 
-parser.add_argument('--host', dest='host', default='localhost',
-    help='The host:port to connect to as the Redis server')
-parser.add_argument('-w', '--workers', default=psutil.NUM_CPUS, type=int,
-    help='How many processes to run. Set to 0 to use all available cores')
-parser.add_argument('-g', '--greenlets', default=0, type=int,
-    help='How many greenlets to run in each process (if used, uses gevent)')
-parser.add_argument('-p', '--path', action='append', default=[],
-    help='Path(s) to include when loading jobs')
-parser.add_argument('-q', '--queue', action='append', default=[],
-    help='The queues to pull work from')
-parser.add_argument('-m', '--import', action='append', default=[],
-    help='The modules to preemptively import')
-parser.add_argument('-i', '--interval', default=60, type=int,
-    help='The polling interval')
+# Options specific to the client we're making'
+parser.add_argument('--host', dest='host', default='redis://localhost:6379',
+    help='The redis:// url to connect to')
 parser.add_argument('-n', '--name', default=None, type=str,
     help='The hostname to identify your worker as')
-parser.add_argument('-d', '--workdir', default='.',
-    help='The base work directory path')
-parser.add_argument('-r', '--resume', default=False, action='store_true',
-    help='Try to resume jobs when the worker agent is restarted')
+
+# Options that we consume in this binary
+parser.add_argument('-p', '--path', action='append', default=[],
+    help='Path(s) to include when loading jobs')
 parser.add_argument('-v', '--verbose', default=False, action='store_true',
     help='Be extra talkative')
 parser.add_argument('-l', '--logger', default=False, type=str,
     help='Log out to this file')
-parser.add_argument('--memory', default=None, type=str,
-    help='Per-worker memory usage limit (can be suffixed with k, m, or g)')
-parser.add_argument('--cpu', default=None, type=str,
-    help='Per-worker CPU time usage limit ([[hh:]mm:]ss)')
+parser.add_argument('-m', '--import', action='append', default=[],
+    help='The modules to preemptively import')
+parser.add_argument('-d', '--workdir', default='.',
+    help='The base work directory path')
+
+# Options specific to the worker we're instantiating
+parser.add_argument('-w', '--workers', default=psutil.NUM_CPUS, type=int,
+    help='How many processes to run. Set to 0 to use all available cores')
+parser.add_argument('-q', '--queue', action='append', default=[],
+    help='The queues to pull work from')
+
+# Options specific to forking greenlet workers
+parser.add_argument('-g', '--greenlets', default=0, type=int,
+    help='How many greenlets to run in each process (if used, uses gevent)')
+parser.add_argument('-i', '--interval', default=60, type=int,
+    help='The polling interval')
+# This remains to be implemented
+# parser.add_argument('-r', '--resume', default=False, action='store_true',
+#     help='Try to resume jobs that this worker had previously been working on')
 args = parser.parse_args()
 
 import os
 import sys
 import qless
 from qless import logger
+from qless.workers.forking import ForkingWorker
 
-# Impose resource limits
-limit_memory(args.memory)
-limit_cpu(args.cpu)
-
-# Now let's add each of the paths to the python search path
+# Add each of the paths to the python search path
 sys.path = [os.path.abspath(p) for p in args.path] + sys.path
 
+# Be verbose if need be. 'Nuff said
 if args.verbose:
     import logging
     logger.setLevel(logging.DEBUG)
 
+# Log to the provided file, if need be
 if args.logger:
     import logging
     from qless import formatter
@@ -109,20 +63,29 @@ if args.logger:
     handler.setLevel(logging.DEBUG)
     logger.addHandler(handler)
 
-# Now let's import all the modules and packages we've been asked to import
-for i in getattr(args, 'import'):
+# Import all the modules and packages we've been asked to import
+for module in getattr(args, 'import'):
     try:
-        logger.info('Loaded %s' % repr(__import__(i)))
+        logger.info('Loaded %s' % repr(__import__(module)))
     except Exception:
-        logger.exception('Failed to import %s' % i)
+        logger.exception('Failed to import %s' % module)
 
-try:
-    if args.greenlets:
-        from qless.gworker import Worker
-        Worker(args.queue, args.host, args.workers, args.interval, args.workdir, hostname=args.name, resume=args.resume, pool_size=args.greenlets).run()
-    else:
-        from qless.worker import Worker
-        Worker(args.queue, args.host, args.workers, args.interval, args.workdir, hostname=args.name, resume=args.resume).run()
-except Exception:
-    logger.exception('Uncaught exception in qless.worker.Worker.run')
+# Change path to our working directory
+os.chdir(args.workdir)
 
+# Build up the kwargs that we'll pass to the worker
+kwargs = {
+    'interval': args.interval
+}
+
+# If we're supposed to use greenlets...
+if args.greenlets:
+    from qless.workers.greenlet import GeventWorker
+    kwargs.update({
+        'klass': GeventWorker,
+        'greenlets': args.greenlets
+    })
+
+# And now run the worker
+ForkingWorker(
+    args.queue, qless.Client(args.host, hostname=args.name), **kwargs).run()

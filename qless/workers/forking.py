@@ -1,6 +1,7 @@
 '''A worker that forks child processes'''
 
 import os
+import psutil
 import signal
 from qless import logger
 
@@ -12,6 +13,10 @@ class ForkingWorker(Worker):
     '''A worker that forks child processes'''
     def __init__(self, *args, **kwargs):
         Worker.__init__(self, *args, **kwargs)
+        # Worker class to use
+        self.klass = self.kwargs.pop('klass', SerialWorker)
+        # How many children to launch
+        self.count = self.kwargs.pop('workers', psutil.NUM_CPUS)
         # A dictionary of child pids to information about them
         self.sandboxes = {}
         # Whether or not we're supposed to shutdown
@@ -36,7 +41,7 @@ class ForkingWorker(Worker):
 
     def spawn(self):
         '''Return a new worker for a child process'''
-        return SerialWorker(self.queues, self.host, self.port, self.interval)
+        return self.klass(self.queues, self.client, **self.kwargs)
 
     def run(self):
         '''Run this worker'''

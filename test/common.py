@@ -20,8 +20,8 @@ class TestQless(unittest.TestCase):
     def setUp(self):
         assert(len(self.redis.keys('*')) == 0)
         # The qless client we're using
-        self.client = qless.client()
-        self.worker = qless.client()
+        self.client = qless.Client()
+        self.worker = qless.Client()
         self.worker.worker_name = 'worker'
 
     def tearDown(self):

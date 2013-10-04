@@ -4,10 +4,9 @@
 from common import TestQless
 
 import time
-import threading
+from threading import Thread
 
 # The stuff we're actually testing
-import qless
 from qless import logger
 from qless.workers.serial import SerialWorker
 
@@ -49,7 +48,6 @@ class TestWorker(TestQless):
     '''Test the worker'''
     def setUp(self):
         TestQless.setUp(self)
-        self.client = qless.client()
         self.queue = self.client.queues['foo']
         self.thread = None
 
@@ -61,14 +59,13 @@ class TestWorker(TestQless):
     def test_basic(self):
         '''Can complete jobs in a basic way'''
         jids = [self.queue.put(SerialJob, {}) for _ in xrange(5)]
-        NoListenWorker(['foo'], interval=0.2).run()
+        NoListenWorker(['foo'], self.client, interval=0.2).run()
         states = [self.client.jobs[jid].state for jid in jids]
         self.assertEqual(states, ['complete'] * 5)
 
     def test_jobs(self):
         '''The jobs method yields None if there are no jobs'''
-        worker = NoListenWorker(['foo'], interval=0.2)
-        worker.reconnect()
+        worker = NoListenWorker(['foo'], self.client, interval=0.2)
         self.assertEqual(worker.jobs().next(), None)
 
     def test_sleeps(self):
@@ -76,16 +73,32 @@ class TestWorker(TestQless):
         for _ in xrange(4):
             self.queue.put(SerialJob, {})
         before = time.time()
-        NoListenWorker(['foo'], interval=0.2).run()
+        NoListenWorker(['foo'], self.client, interval=0.2).run()
         self.assertGreater(time.time() - before, 0.2)
 
     def test_lost_locks(self):
         '''The worker should be able to stop processing if need be'''
         jid = [self.queue.put(SerialJob, {'sleep': 0.1}) for _ in xrange(5)][0]
-        self.thread = threading.Thread(target=Worker(['foo'], interval=0.2).run)
+        self.thread = Thread(
+            target=Worker(['foo'], self.client, interval=0.2).run)
         self.thread.start()
         # Now, we'll timeout one of the jobs and ensure that kill is invoked
         while self.client.jobs[jid].state != 'running':
             time.sleep(0.01)
         self.client.jobs[jid].timeout()
         self.assertEqual(self.client.redis.brpop('foo', 1), ('foo', jid))
+
+    def test_kill(self):
+        '''Should be able to fall on its sword if need be'''
+        worker = SerialWorker([], self.client)
+        worker.jid = 'foo'
+        thread = Thread(target=worker.kill, args=(worker.jid,))
+        thread.start()
+        thread.join()
+        self.assertFalse(thread.is_alive())
+
+    def test_kill_dead(self):
+        '''If we've moved on to another job, say so'''
+        # If this tests runs to completion, it has succeeded
+        worker = SerialWorker([], self.client)
+        worker.kill('foo')

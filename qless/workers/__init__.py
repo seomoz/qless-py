@@ -2,11 +2,6 @@
 
 '''Our base worker'''
 
-import os
-import redis
-import qless
-import shutil
-import psutil
 from qless import logger
 
 # Try to use the fast json parser
@@ -29,19 +24,6 @@ except ImportError:  # pragma: no cover
 class Worker(object):
     '''Worker. For doing work'''
     @classmethod
-    def clean(cls, sandbox):
-        '''Clean up the sandbox of all files'''
-        # And that it's clear of any files
-        for path in os.listdir(sandbox):
-            path = os.path.join(sandbox, path)
-            if os.path.isdir(path):
-                logger.info('Removing tree %s...' % path)
-                shutil.rmtree(path)
-            else:
-                logger.info('Removing file %s...' % path)
-                os.remove(path)
-
-    @classmethod
     def title(cls, message=None):
         '''Set the title of the process'''
         if message == None:
@@ -50,27 +32,22 @@ class Worker(object):
             setproctitle('qless-py-worker %s' % message)
             logger.info(message)
 
-    def __init__(self, queues, host=None, workers=None, interval=60,
-        workdir='.', resume=None):
-        host = host or 'localhost'
-        _host, _, _port = host.partition(':')
-        _port = int(_port or 6379)
-        self.host = _host
-        self.port = _port
-        self.count = workers or psutil.NUM_CPUS
-        self.client = qless.client(self.host, self.port)
-        self.queues = queues
-        self.resume = resume or []
-        self.interval = interval
-        # This is for filesystem sandboxing. Each worker has
-        # a directory associated with it, which it should make
-        # sure is the working directory in which it runs each
-        # of the jobs. It should also ensure that the directory
-        # exists, and clobbers files before each run, and after.
-        self.workdir = os.path.abspath(workdir)
-        # These are the job ids that I should get to first, before
-        # picking off other jobs
-        self.jids = {}
+    def __init__(self, queues, client, **kwargs):
+        self.client = client
+        # This should accept either queue objects, or string queue names
+        self.queues = []
+        for queue in queues:
+            if isinstance(queue, basestring):
+                self.queues.append(self.client.queues[queue])
+            else:
+                self.queues.append(queue)
+
+        # Save our kwargs, since a common pattern to instantiate subworkers
+        self.kwargs = kwargs
+        # Check for any jobs that we should resume
+        self.resume = kwargs.get('resume', [])
+        # How frequently we should poll for work
+        self.interval = kwargs.get('interval', 60)
 
     def jobs(self):
         '''Generator for all the jobs'''
@@ -93,15 +70,10 @@ class Worker(object):
             if not seen:
                 yield None
 
-    def reconnect(self):
-        '''Connect to the provided instance'''
-        self.client = qless.client(self.host, self.port)
-        self.queues = [self.client.queues[q] for q in self.queues]
-
     def listen(self):
         '''Listen for pubsub messages relevant to this worker'''
         logger.info('Listening on pubsub')
-        pubsub = redis.Redis(self.host, self.port).pubsub()
+        pubsub = self.client.redis.pubsub()
         pubsub.subscribe(['ql:w:' + self.client.worker_name])
         for message in pubsub.listen():
             if message['type'] != 'message':

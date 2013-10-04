@@ -1,6 +1,5 @@
 '''A Gevent-based worker'''
 
-import qless
 import gevent
 import gevent.pool
 
@@ -11,12 +10,12 @@ from qless import logger
 class GeventWorker(Worker):
     '''A Gevent-based worker'''
     def __init__(self, *args, **kwargs):
+        Worker.__init__(self, *args, **kwargs)
         # Should we shut down after this?
         self.shutdown = False
         # A mapping of jids to the greenlets handling them
         self.greenlets = {}
-        self.pool = gevent.pool.Pool(kwargs.pop('pool_size', 10))
-        Worker.__init__(self, *args, **kwargs)
+        self.pool = gevent.pool.Pool(kwargs.pop('greenlets', 10))
 
     def process(self, job):
         '''Process a job'''
@@ -36,16 +35,12 @@ class GeventWorker(Worker):
 
     @classmethod
     def patch(cls):  # pragma: no cover
-        # Monkey-patch anything that needs to be patched
+        '''Monkey-patch anything that needs to be patched'''
         from gevent import monkey
         monkey.patch_all()
 
     def run(self):
         '''Work on jobs'''
-        # We should probably open up our own redis client
-        self.client = qless.client(self.host, self.port)
-        self.queues = [self.client.queues[q] for q in self.queues]
-
         # And monkey-patch before doing any imports
         self.patch()
 
@@ -69,12 +64,8 @@ class GeventWorker(Worker):
                 else:
                     logger.debug('Sleeping for %fs' % self.interval)
                     gevent.sleep(self.interval)
-        except StopIteration:  # pragma: no cover
-            # It is a known bug that coverage doesn't always play nice with
-            # gevent, but this code path is exercised, I promise.
+        except StopIteration:
             logger.info('Exhausted jobs')
-        finally:  # pragma: no cover
-            # It is a known bug that coverage doesn't always play nice with
-            # gevent, but this code path is exercised, I promise.
+        finally:
             logger.info('Waiting for greenlets to finish')
             self.pool.join()

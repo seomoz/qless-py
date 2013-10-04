@@ -41,7 +41,8 @@ class TestWorker(TestQless):
     '''Test the worker'''
     def setUp(self):
         TestQless.setUp(self)
-        self.client = qless.client()
+        self.worker = PatchedGeventWorker(
+            ['foo'], self.client, greenlets=1, interval=0.2)
         self.queue = self.client.queues['foo']
         self.thread = None
 
@@ -53,7 +54,7 @@ class TestWorker(TestQless):
     def test_basic(self):
         '''Can complete jobs in a basic way'''
         jids = [self.queue.put(GeventJob, {}) for _ in xrange(5)]
-        PatchedGeventWorker(['foo'], pool_size=1, interval=0.2).run()
+        self.worker.run()
         states = [self.client.jobs[jid].state for jid in jids]
         self.assertEqual(states, ['complete'] * 5)
 
@@ -62,12 +63,12 @@ class TestWorker(TestQless):
         for _ in xrange(4):
             self.queue.put(GeventJob, {})
         before = time.time()
-        PatchedGeventWorker(['foo'], interval=0.2).run()
+        self.worker.run()
         self.assertGreater(time.time() - before, 0.2)
 
     def test_kill(self):
         '''Can kill greenlets when it loses its lock'''
-        worker = PatchedGeventWorker(['foo'])
+        worker = PatchedGeventWorker(['foo'], self.client)
         greenlet = gevent.spawn(gevent.sleep, 100)
         worker.greenlets['foo'] = greenlet
         worker.kill('foo')
@@ -77,10 +78,4 @@ class TestWorker(TestQless):
     def test_kill_dead(self):
         '''Does not panic if the greenlet handling a job is no longer around'''
         # This test succeeds if it finishes without an exception
-        worker = PatchedGeventWorker(['foo'])
-        worker.kill('foo')
-
-
-if __name__ == '__main__':
-    import unittest
-    unittest.main()
+        self.worker.kill('foo')

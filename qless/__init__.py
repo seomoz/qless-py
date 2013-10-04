@@ -170,20 +170,19 @@ class Events(object):
         return self._callbacks.pop(evt, None)
 
 
-class client(object):
+class Client(object):
     '''Basic qless client object.'''
-    def __init__(self, host='localhost', port=6379, hostname=None, **kwargs):
+    def __init__(self, url='redis://localhost:6379', hostname=None, **kwargs):
         import socket
         # This is our unique idenitifier as a worker
         self.worker_name = hostname or socket.gethostname()
-        # This is just the redis instance we're connected to
-        # conceivably someone might want to work with multiple
-        # instances simultaneously.
-        self.redis   = redis.Redis(host, port, **kwargs)
-        self.config  = Config(self)
-        self.jobs    = Jobs(self)
+        # This is just the redis instance we're connected to conceivably
+        # someone might want to work with multiple instances simultaneously.
+        self.redis = redis.Redis.from_url(url, **kwargs)
+        self.jobs = Jobs(self)
+        self.queues = Queues(self)
+        self.config = Config(self)
         self.workers = Workers(self)
-        self.queues  = Queues(self)
 
         # We now have a single unified core script.
         data = pkgutil.get_data('qless', 'qless-core/qless.lua')

@@ -9,6 +9,11 @@ from . import Worker
 
 class SerialWorker(Worker):
     '''A worker that just does serial work'''
+    def __init__(self, *args, **kwargs):
+        Worker.__init__(self, *args, **kwargs)
+        # The jid that we're working on at the moment
+        self.jid = None
+
     def signals(self):
         '''Register all of our signal handlers'''
         # QUIT - Wait for child to finish processing then exit
@@ -20,12 +25,11 @@ class SerialWorker(Worker):
 
     def kill(self, jid):
         '''The best way to do this is to fall on our sword'''
-        if jid in self.jids:  # pragma: no cover
+        if jid == self.jid:
             exit(1)
 
     def run(self):
         '''Run jobs, popping one after another'''
-        self.reconnect()
         # Register our signal handlers
         self.signals()
 
@@ -35,10 +39,12 @@ class SerialWorker(Worker):
             for job in self.jobs():
                 # If there was no job to be had, we should sleep a little bit
                 if not job:
+                    self.jid = None
                     self.title('Sleeping...')
                     logger.debug('Sleeping for %fs' % self.interval)
                     time.sleep(self.interval)
                 else:
+                    self.jid = job.jid
                     self.title('Working on %s (%s)' % (job.jid, job.klass_name))
                     job.process()
         finally:
