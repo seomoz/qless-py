@@ -4,6 +4,7 @@
 from common import TestQless
 
 import time
+import gevent
 
 # The stuff we're actually testing
 import qless
@@ -55,6 +56,29 @@ class TestWorker(TestQless):
         PatchedGeventWorker(['foo'], pool_size=1, interval=0.2).run()
         states = [self.client.jobs[jid].state for jid in jids]
         self.assertEqual(states, ['complete'] * 5)
+
+    def test_sleeps(self):
+        '''Make sure the client sleeps if there aren't jobs to be had'''
+        for _ in xrange(4):
+            self.queue.put(GeventJob, {})
+        before = time.time()
+        PatchedGeventWorker(['foo'], interval=0.2).run()
+        self.assertGreater(time.time() - before, 0.2)
+
+    def test_kill(self):
+        '''Can kill greenlets when it loses its lock'''
+        worker = PatchedGeventWorker(['foo'])
+        greenlet = gevent.spawn(gevent.sleep, 100)
+        worker.greenlets['foo'] = greenlet
+        worker.kill('foo')
+        greenlet.join()
+        self.assertTrue(isinstance(greenlet.value, gevent.GreenletExit))
+
+    def test_kill_dead(self):
+        '''Does not panic if the greenlet handling a job is no longer around'''
+        # This test succeeds if it finishes without an exception
+        worker = PatchedGeventWorker(['foo'])
+        worker.kill('foo')
 
 
 if __name__ == '__main__':

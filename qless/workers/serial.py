@@ -29,21 +29,6 @@ class SerialWorker(Worker):
         # Register our signal handlers
         self.signals()
 
-        # # First things first, we should clear out any jobs that
-        # # we're responsible for off-hand
-        # while len(self.jids):
-        #     try:
-        #         job = self.client.jobs[self.jids.pop(0)]
-        #         # If we still have access to it, then we should process it
-        #         if job.heartbeat():
-        #             logger.info('Resuming %s' % job.jid)
-        #             self.title('Working %s (%s)' % (job.jid, job.klass_name))
-        #             job.process()
-        #         else:
-        #             logger.warn(
-        #                 'Lost heart on would-be resumed job %s' % job.jid)
-        #     except KeyboardInterrupt:
-        #         return
         thread = threading.Thread(target=self.listen)
         try:
             thread.start()

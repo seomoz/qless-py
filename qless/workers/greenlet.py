@@ -69,8 +69,12 @@ class GeventWorker(Worker):
                 else:
                     logger.debug('Sleeping for %fs' % self.interval)
                     gevent.sleep(self.interval)
-        except StopIteration:
+        except StopIteration:  # pragma: no cover
+            # It is a known bug that coverage doesn't always play nice with
+            # gevent, but this code path is exercised, I promise.
             logger.info('Exhausted jobs')
-        finally:
+        finally:  # pragma: no cover
+            # It is a known bug that coverage doesn't always play nice with
+            # gevent, but this code path is exercised, I promise.
             logger.info('Waiting for greenlets to finish')
             self.pool.join()

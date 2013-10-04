@@ -51,7 +51,7 @@ class Worker(object):
             logger.info(message)
 
     def __init__(self, queues, host=None, workers=None, interval=60,
-        workdir='.', resume=False):
+        workdir='.', resume=None):
         host = host or 'localhost'
         _host, _, _port = host.partition(':')
         _port = int(_port or 6379)
@@ -60,7 +60,7 @@ class Worker(object):
         self.count = workers or psutil.NUM_CPUS
         self.client = qless.client(self.host, self.port)
         self.queues = queues
-        self.resume = resume
+        self.resume = resume or []
         self.interval = interval
         # This is for filesystem sandboxing. Each worker has
         # a directory associated with it, which it should make
@@ -74,6 +74,15 @@ class Worker(object):
 
     def jobs(self):
         '''Generator for all the jobs'''
+        # If we should resume work, then we should hand those out first,
+        # assuming we can still heartbeat them
+        for jid in self.resume:
+            try:
+                job = self.client.jobs[jid]
+                if job.heartbeat():
+                    yield job
+            except:
+                logger.exception('Cannot resume %s' % jid)
         while True:
             seen = False
             for queue in self.queues:
