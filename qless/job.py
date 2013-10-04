@@ -254,6 +254,10 @@ class Job(BaseJob):
         else:
             return self.client('depends', self.jid, 'off', *args) or False
 
+    def timeout(self):
+        '''Time out this job'''
+        self.client('timeout', self.jid)
+
 
 class RecurringJob(BaseJob):
     '''Recurring Job object'''

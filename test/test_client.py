@@ -29,6 +29,7 @@ class TestClient(TestQless):
         '''Provides access to unfail'''
         jids = map(str, range(10))
         for jid in jids:
+            print 'Popping %s' % jid
             self.client.queues['foo'].put('Foo', {}, jid=jid)
             self.client.queues['foo'].pop().fail('foo', 'bar')
         for jid in jids:
