@@ -36,6 +36,10 @@ class Worker(SerialWorker):
         self.client.redis.rpush('foo', jid)
         raise KeyboardInterrupt()
 
+    def signals(self):
+        '''Do not set any signal handlers'''
+        pass
+
 
 class NoListenWorker(Worker):
     '''A worker that just won't listen'''

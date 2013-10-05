@@ -2,7 +2,11 @@
 
 '''Our base worker'''
 
+import os
+import code
+import signal
 import itertools
+import traceback
 from qless import logger
 from qless.exceptions import LostLockException
 
@@ -65,6 +69,8 @@ class Worker(object):
             self.resume = self.resumable()
         # How frequently we should poll for work
         self.interval = kwargs.get('interval', 60)
+        # To mark whether or not we should shutdown after work is done
+        self.shutdown = False
 
     def resumable(self):
         '''Find all the jobs that we'd previously been working on'''
@@ -118,3 +124,31 @@ class Worker(object):
     def kill(self, jid):
         '''Stop processing the provided jid'''
         raise NotImplementedError('Derived classes must override "kill"')
+
+    def signals(self, signals=('QUIT', 'USR1', 'USR2')):
+        '''Register our signal handler'''
+        for sig in signals:
+            signal.signal(getattr(signal, 'SIG' + sig), self.handler)
+
+    # Unfortunately, for most of this, it's not really practical to unit test
+    def handler(self, signum, frame):  # pragma: no cover
+        '''Signal handler for this process'''
+        if signum == signal.SIGQUIT:
+            # QUIT - Finish processing, but don't do any more work after that
+            self.shutdown = True
+        elif signum == signal.SIGUSR1:
+            # USR1 - Print the backtrace
+            message = ''.join(traceback.format_stack(frame))
+            message = 'Signaled traceback for %s:\n%s' % (os.getpid(), message)
+            print message
+            logger.warn(message)
+        elif signum == signal.SIGUSR2:
+            # USR2 - Enter a debugger
+            # Much thanks to http://stackoverflow.com/questions/132058
+            data = {'_frame': frame}    # Allow access to frame object.
+            data.update(frame.f_globals)  # Unless shadowed by global
+            data.update(frame.f_locals)
+            # Build up a message with a traceback
+            message = ''.join(traceback.format_stack(frame))
+            message = 'Traceback:\n%s' % message
+            code.InteractiveConsole(data).interact(message)

@@ -48,6 +48,7 @@ class ForkingWorker(Worker):
 
     def run(self):
         '''Run this worker'''
+        self.signals(('TERM', 'INT', 'QUIT'))
         # Divide up the jobs that we have to divy up between the workers. This
         # produces evenly-sized groups of jobs
         resume = self.divide(self.resume, self.count)
@@ -75,3 +76,10 @@ class ForkingWorker(Worker):
                     exit(0)
         finally:
             self.stop(signal.SIGTERM)
+
+    def handler(self, signum, frame):  # pragma: no cover
+        '''Signal handler for this process'''
+        if signum in (signal.SIGTERM, signal.SIGINT, signal.SIGQUIT):
+            for cpid in self.sandboxes.keys():
+                os.kill(cpid, signum)
+            exit(0)

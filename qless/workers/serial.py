@@ -14,15 +14,6 @@ class SerialWorker(Worker):
         # The jid that we're working on at the moment
         self.jid = None
 
-    def signals(self):
-        '''Register all of our signal handlers'''
-        # QUIT - Wait for child to finish processing then exit
-        # TERM / INT - Immediately kill child then exit
-        # USR1 - Immediately kill child but don't exit
-        # USR2 - Don't start to process any new jobs
-        # CONT - Start to process new jobs again after a USR2
-        pass
-
     def kill(self, jid):
         '''The best way to do this is to fall on our sword'''
         if jid == self.jid:
@@ -47,5 +38,7 @@ class SerialWorker(Worker):
                     self.jid = job.jid
                     self.title('Working on %s (%s)' % (job.jid, job.klass_name))
                     job.process()
+                if self.shutdown:
+                    break
         finally:
             thread.join()
