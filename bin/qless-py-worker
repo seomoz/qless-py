@@ -35,9 +35,8 @@ parser.add_argument('-g', '--greenlets', default=0, type=int,
     help='How many greenlets to run in each process (if used, uses gevent)')
 parser.add_argument('-i', '--interval', default=60, type=int,
     help='The polling interval')
-# This remains to be implemented
-# parser.add_argument('-r', '--resume', default=False, action='store_true',
-#     help='Try to resume jobs that this worker had previously been working on')
+parser.add_argument('-r', '--resume', default=False, action='store_true',
+    help='Try to resume jobs that this worker had previously been working on')
 args = parser.parse_args()
 
 import os
@@ -75,7 +74,8 @@ os.chdir(args.workdir)
 
 # Build up the kwargs that we'll pass to the worker
 kwargs = {
-    'interval': args.interval
+    'interval': args.interval,
+    'resume': args.resume
 }
 
 # If we're supposed to use greenlets...

@@ -3,6 +3,7 @@
 import os
 import psutil
 import signal
+import itertools
 from qless import logger
 
 from . import Worker
@@ -39,19 +40,24 @@ class ForkingWorker(Worker):
             finally:
                 self.sandboxes.pop(pid, None)
 
-    def spawn(self):
+    def spawn(self, **kwargs):
         '''Return a new worker for a child process'''
-        return self.klass(self.queues, self.client, **self.kwargs)
+        copy = dict(self.kwargs)
+        copy.update(kwargs)
+        return self.klass(self.queues, self.client, **copy)
 
     def run(self):
         '''Run this worker'''
-        for _ in range(self.count):
+        # Divide up the jobs that we have to divy up between the workers. This
+        # produces evenly-sized groups of jobs
+        resume = self.divide(self.resume, self.count)
+        for index in range(self.count):
             cpid = os.fork()
             if cpid:
                 logger.info('Spawned worker %i' % cpid)
                 self.sandboxes[cpid] = {}
             else:  # pragma: no cover
-                self.spawn().run()
+                self.spawn(resume=resume[index]).run()
                 exit(0)
 
         try:
