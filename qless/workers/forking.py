@@ -75,7 +75,7 @@ class ForkingWorker(Worker):
                     self.spawn().run()
                     exit(0)
         finally:
-            self.stop(signal.SIGTERM)
+            self.stop(signal.SIGKILL)
 
     def handler(self, signum, frame):  # pragma: no cover
         '''Signal handler for this process'''

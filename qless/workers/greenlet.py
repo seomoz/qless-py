@@ -41,6 +41,9 @@ class GeventWorker(Worker):
 
     def run(self):
         '''Work on jobs'''
+        # Register signal handlers
+        self.signals()
+
         # And monkey-patch before doing any imports
         self.patch()
 
