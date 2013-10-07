@@ -1,11 +1,10 @@
-qless
+qless [![Build Status](https://travis-ci.org/seomoz/qless-py.png)](https://travis-ci.org/seomoz/qless-py)
 =====
 Qless is a powerful `Redis`-based job queueing system inspired by
 [resque](https://github.com/defunkt/resque#readme),
 but built on a collection of Lua scripts, maintained in the
-[qless-core](https://github.com/seomoz/qless-core) repo.
-
-[![Build Status](https://travis-ci.org/seomoz/qless-py.png)](https://travis-ci.org/seomoz/qless-py)
+[qless-core](https://github.com/seomoz/qless-core) repo. Be sure to check the
+changelog below.
 
 Philosophy and Nomenclature
 ===========================
@@ -232,30 +231,15 @@ qless-py-worker --import my.really.bigModule
 
 Filesystem
 ----------
-Each worker runs in a sandbox directory that:
+Previous versions of `qless-py` included a feature to have each worker process
+run in its own sandbox directory. We've removed this feature because since
+greenlets can't run in their own directory, the 'regular' and greenlet workers
+behave differently.
 
-1. Clobbers any files in it left _after_ running a job
-1. Clobbers any files in it _before_ running a job
-
-The worker runs in the context of that directory, so when you create files
-like this,
-
-```python
-with file('foo.txt') as f:
-	...
-```
-
-they get created in the worker's sandbox. This can be useful for storing
-temporary files, but it also means that any files that need to persist should
-either be put somewhere specific, or uploaded somewhere, etc. These sandboxes
-have the form `<workdir>/qless-py-workers/sandbox-<k>/`, so when running the
-worker, you can specify a particular working directory as the base,
-
-```bash
-qless-py-worker --workdir /home/foo/awesome-project
-```
-
-which would yield sandboxes `/home/foo/awesome-project/qless-py-workers/sandbox-<k>`.
+We _have_ considered an interface where each job is given a `sandbox` attribute
+when it's popped, thus allowing access to a unique directory and allowing files
+to be cleaned up between jobs. We may or may not implement this subject to
+interest.
 
 Gevent
 ------
@@ -267,6 +251,31 @@ qless to create a pool of greenlets to run you job inside each process. To run
 ```bash
 qless-py-worker --workers 5 --greenlets 50
 ```
+
+Signals
+-------
+With a worker running, you can send signals to child processes to:
+
+- `USR1` - Get the current stack trace in that worker
+- `USR2` - Enter a debugger in that worker
+
+So, for example, if one of the worker child processes is `PID 1234`, then you
+can invoke `kill -USR1 1234` to get the backtrace in the logs (and console
+output).
+
+Resuming Jobs
+-------------
+This is an __experimental__ feature, but you can start workers `--resume` flag
+to have the worker begin its processing with the jobs it left off with. For
+instance, during deployments, it's common to restart the worker processes, and
+the `--resume` flag has the worker first perform a check with `qless` to see
+which jobs it had last been running (and still has locks for).
+
+This flag should be used with some caution. In particular, if two workers are
+running with the same worker name, then this should not be used. The reason is
+that through the `qless` interface, it's impossible to differentiate the two,
+and currently-running jobs may be confused with jobs that were simply dropped
+when the worker was stopped.
 
 Debugging / Developing
 ======================
@@ -539,3 +548,21 @@ It's available in the [`qless`](https://github.com/seomoz/qless) library as a
 mountable [`Sinatra`](http://www.sinatrarb.com/) app. The web app is language
 agnostic and was one of the major desires out of this project, so you should
 consider using it even if you're not planning on using the Ruby client.
+
+Changelog
+=========
+Things that have changed over time.
+
+v0.10.0
+-------
+The major change was the switch to `unified` qless.
+
+- Pre-empts workers running jobs for which they've lost their lock
+- Improved coverage (98%, up from 71%), all of which was worker code
+- Debugging signals
+- Resumable workers
+- Redis URL interface. When specifying a qless client, the default is still to
+	point to `localhost:6379`, but rather than specify `host` and `port`, you
+	should provide a single `host` argument of a Redis URL format. For example,
+	`redis://user:auth@host:port/db`. Many of these paremeters are optional, but
+	it seems to be the convention recently.
