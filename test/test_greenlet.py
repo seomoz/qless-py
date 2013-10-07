@@ -69,7 +69,7 @@ class TestWorker(TestQless):
     def test_kill(self):
         '''Can kill greenlets when it loses its lock'''
         worker = PatchedGeventWorker(['foo'], self.client)
-        greenlet = gevent.spawn(gevent.sleep, 100)
+        greenlet = gevent.spawn(gevent.sleep, 1)
         worker.greenlets['foo'] = greenlet
         worker.kill('foo')
         greenlet.join()

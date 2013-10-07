@@ -28,7 +28,7 @@ class GeventWorker(Worker):
     def kill(self, jid):
         '''Stop the greenlet processing the provided jid'''
         greenlet = self.greenlets.get(jid)
-        if not greenlet:
+        if greenlet == None:
             logger.warn('Worker for %s already dead' % jid)
         else:
             greenlet.kill()
