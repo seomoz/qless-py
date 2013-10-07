@@ -73,7 +73,7 @@ class TestWorker(TestQless):
         worker.greenlets['foo'] = greenlet
         worker.kill('foo')
         greenlet.join()
-        self.assertTrue(isinstance(greenlet.value, gevent.GreenletExit))
+        self.assertIsInstance(greenlet.value, gevent.GreenletExit)
 
     def test_kill_dead(self):
         '''Does not panic if the greenlet handling a job is no longer around'''

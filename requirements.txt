@@ -2,3 +2,6 @@ simplejson==3.3.0
 argparse==1.2.1
 hiredis==0.1.0
 redis==2.7.5
+psutil==0.7.1
+gevent==0.13.8
+setproctitle==1.1.5
