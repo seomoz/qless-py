@@ -555,7 +555,11 @@ Things that have changed over time.
 
 v0.10.0
 -------
-The major change was the switch to `unified` qless.
+The major change was the switch to `unified` qless. This change is
+semi-incompatibile. In particular, it changes the job history format but the new
+version knows how to convert the old format forward. Upgrades to your workers
+should be made from the end of pipelines towards the start. It will also be
+necessary to upgrade your `qless-web` install if you're using it.
 
 - Pre-empts workers running jobs for which they've lost their lock
 - Improved coverage (98%, up from 71%), all of which was worker code
