@@ -168,3 +168,8 @@ class TestRetry(TestQless):
         self.client.jobs['jid'].untag('valueerror')
         self.client.queues['foo'].pop().process()
         self.assertEqual(self.client.jobs['jid'].state, 'failed')
+
+    def test_docstring(self):
+        '''Retry decorator should preserve docstring'''
+        self.assertEqual(Foo.process.__doc__,
+            'This is supposed to raise an Exception')

@@ -1,15 +1,17 @@
-#! /usr/bin/env python
+'''Main qless business'''
 
 import time
 import redis
 import pkgutil
 import logging
+import decorator
 import simplejson as json
 
 # Internal imports
 from .exceptions import QlessException
 
 
+# Our logger
 logger = logging.getLogger('qless')
 formatter = logging.Formatter(
     '%(asctime)s | PID %(process)d | [%(levelname)s] %(message)s')
@@ -23,16 +25,14 @@ logger.setLevel(logging.FATAL)
 def retry(*excepts):
     '''A decorator to specify a bunch of exceptions that should be caught
     and the job retried. It turns out this comes up with relative frequency'''
-    def decorator(func):
+    @decorator.decorator
+    def new_func(func, job):
         '''No docstring'''
-        def _func(job):
-            '''No doctstring'''
-            try:
-                func(job)
-            except tuple(excepts):
-                job.retry()
-        return _func
-    return decorator
+        try:
+            func(job)
+        except tuple(excepts):
+            job.retry()
+    return new_func
 
 
 class Jobs(object):

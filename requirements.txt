@@ -5,3 +5,4 @@ redis==2.7.5
 psutil==0.7.1
 gevent==0.13.8
 setproctitle==1.1.5
+decorator==3.4.0
