@@ -29,6 +29,8 @@ class TestWorker(TestQless):
 
     def test_clean(self):
         '''Should be able to clean a directory'''
+        if not os.path.exists('test/tmp'):
+            os.makedirs('test/tmp')
         self.assertEqual(os.listdir('test/tmp'), [])
         os.makedirs('test/tmp/foo/bar')
         with open('test/tmp/file.out', 'w+'):
