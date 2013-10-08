@@ -7,6 +7,7 @@ import qless
 from qless.workers import Worker
 
 # External dependencies
+import os
 import itertools
 
 
@@ -25,6 +26,56 @@ class TestWorker(TestQless):
     def test_kill(self):
         '''The base worker class' kill method should raise an exception'''
         self.assertRaises(NotImplementedError, self.worker.kill, 1)
+
+    def test_clean(self):
+        '''Should be able to clean a directory'''
+        self.assertEqual(os.listdir('test/tmp'), [])
+        os.makedirs('test/tmp/foo/bar')
+        with open('test/tmp/file.out', 'w+'):
+            pass
+        self.assertNotEqual(os.listdir('test/tmp'), [])
+        Worker.clean('test/tmp')
+        self.assertEqual(os.listdir('test/tmp'), [])
+
+    def test_sandbox(self):
+        '''The sandbox utility should work'''
+        path = 'test/tmp/foo'
+        self.assertFalse(os.path.exists(path))
+        try:
+            with Worker.sandbox(path):
+                self.assertTrue(os.path.exists(path))
+                for name in ['whiz', 'widget', 'bang']:
+                    with open(os.path.join(path, name), 'w+'):
+                        pass
+                # Now raise an exception
+                raise ValueError('foo')
+        except ValueError:
+            pass
+        # Make sure the directory has been cleaned
+        self.assertEqual(os.listdir(path), [])
+        os.rmdir(path)
+
+    def test_sandbox_exists(self):
+        '''Sandbox creation should not throw an error if the path exists'''
+        path = 'test/tmp'
+        self.assertEqual(os.listdir(path), [])
+        with Worker.sandbox(path):
+            pass
+        # If we get to this point, the test succeeds
+        self.assertTrue(True)
+
+    def test_dirty_sandbox(self):
+        '''If a sandbox is dirty on arrival, clean it first'''
+        path = 'test/tmp/foo'
+        with Worker.sandbox(path):
+            for name in ['whiz', 'widget', 'bang']:
+                with open(os.path.join(path, name), 'w+'):
+                    pass
+            # Now it's sullied. Clean it up
+            self.assertNotEqual(os.listdir(path), [])
+            with Worker.sandbox(path):
+                self.assertEqual(os.listdir(path), [])
+        os.rmdir(path)
 
     def test_resume(self):
         '''We should be able to resume jobs'''

@@ -1,5 +1,6 @@
 '''A Gevent-based worker'''
 
+import os
 import gevent
 import gevent.pool
 
@@ -15,15 +16,26 @@ class GeventWorker(Worker):
         self.shutdown = False
         # A mapping of jids to the greenlets handling them
         self.greenlets = {}
-        self.pool = gevent.pool.Pool(kwargs.pop('greenlets', 10))
+        count = kwargs.pop('greenlets', 10)
+        self.pool = gevent.pool.Pool(count)
+        # A list of the sandboxes that we'll use
+        self.sandbox = kwargs.pop(
+            'sandbox', os.path.join(os.getcwd(), 'qless-py-workers'))
+        print 'Using sandbox %s' % self.sandbox
+        self.sandboxes = [
+            os.path.join(self.sandbox, 'greenlet-%i' % i) for i in range(count)]
 
     def process(self, job):
         '''Process a job'''
+        sandbox = self.sandboxes.pop(0)
         try:
-            job.process()
+            with Worker.sandbox(sandbox):
+                job.sandbox = sandbox
+                job.process()
         finally:
             # Delete its entry from our greenlets mapping
-            self.greenlets.pop(job.jid)
+            self.greenlets.pop(job.jid, None)
+            self.sandboxes.append(sandbox)
 
     def kill(self, jid):
         '''Stop the greenlet processing the provided jid'''

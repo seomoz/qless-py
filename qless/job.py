@@ -6,8 +6,10 @@ import os
 import time
 import types
 import traceback
-from qless import logger
 import simplejson as json
+
+# Internal imports
+from qless import logger
 from qless.exceptions import LostLockException, QlessException
 
 

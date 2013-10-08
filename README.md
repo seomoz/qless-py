@@ -236,10 +236,29 @@ run in its own sandbox directory. We've removed this feature because since
 greenlets can't run in their own directory, the 'regular' and greenlet workers
 behave differently.
 
-We _have_ considered an interface where each job is given a `sandbox` attribute
-when it's popped, thus allowing access to a unique directory and allowing files
-to be cleaned up between jobs. We may or may not implement this subject to
-interest.
+In lieu of this behavior, each child process runs in its own sandboxed directory
+and each job is given a `sandbox` attribute which is the name of a directory for
+the sole use of that job. It's guaranteed to be clean by the time the job is
+performed, and it cleaned up afterwards.
+
+For example, if you invoke:
+
+```bash
+qless-py-worker --workers 4 --greenlets 5 --workdir foo
+```
+
+Then four child processes will be spawned using the directories:
+
+```
+foo/qless-py-workers/sandbox-{0,1,2,3}
+```
+
+The jobs run by the greenlets in the first process are given their own sandboxes
+of the form:
+
+```
+foo/qless-py-workers/sandbox-0/greenlet-{0,1,2,3,4}
+```
 
 Gevent
 ------
@@ -561,7 +580,7 @@ version knows how to convert the old format forward. Upgrades to your workers
 should be made from the end of pipelines towards the start. It will also be
 necessary to upgrade your `qless-web` install if you're using it.
 
-- Pre-empts workers running jobs for which they've lost their lock
+- Preempts workers running jobs for which they've lost their lock
 - Improved coverage (98%, up from 71%), all of which was worker code
 - Debugging signals
 - Resumable workers

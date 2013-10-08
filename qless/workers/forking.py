@@ -3,10 +3,10 @@
 import os
 import psutil
 import signal
-import itertools
-from qless import logger
 
+# Internal imports
 from . import Worker
+from qless import logger, util
 from .serial import SerialWorker
 
 
@@ -17,7 +17,7 @@ class ForkingWorker(Worker):
         # Worker class to use
         self.klass = self.kwargs.pop('klass', SerialWorker)
         # How many children to launch
-        self.count = self.kwargs.pop('workers', psutil.NUM_CPUS)
+        self.count = self.kwargs.pop('workers', 0) or psutil.NUM_CPUS
         # A dictionary of child pids to information about them
         self.sandboxes = {}
         # Whether or not we're supposed to shutdown
@@ -44,6 +44,11 @@ class ForkingWorker(Worker):
         '''Return a new worker for a child process'''
         copy = dict(self.kwargs)
         copy.update(kwargs)
+        # Apparently there's an issue with importing gevent in the parent
+        # process and then using it int he child. This is meant to relieve that
+        # problem by allowing `klass` to be specified as a string.
+        if isinstance(self.klass, basestring):
+            self.klass = util.import_class(self.klass)
         return self.klass(self.queues, self.client, **copy)
 
     def run(self):
@@ -53,27 +58,35 @@ class ForkingWorker(Worker):
         # produces evenly-sized groups of jobs
         resume = self.divide(self.resume, self.count)
         for index in range(self.count):
+            # The sandbox for the child worker
+            sandbox = os.path.join(
+                os.getcwd(), 'qless-py-workers', 'sandbox-%s' % index)
             cpid = os.fork()
             if cpid:
                 logger.info('Spawned worker %i' % cpid)
-                self.sandboxes[cpid] = {}
+                self.sandboxes[cpid] = sandbox
             else:  # pragma: no cover
-                self.spawn(resume=resume[index]).run()
-                exit(0)
+                # Move to the sandbox as the current working directory
+                with Worker.sandbox(sandbox):
+                    os.chdir(sandbox)
+                    self.spawn(resume=resume[index], sandbox=sandbox).run()
+                    exit(0)
 
         try:
             while not self.shutdown:
                 pid, status = os.wait()
                 logger.warn('Worker %i died with status %i from signal %i' % (
                     pid, status >> 8, status & 0xff))
-                slot = self.sandboxes.pop(pid)
+                sandbox = self.sandboxes.pop(pid)
                 cpid = os.fork()
                 if cpid:
                     logger.info('Spawned replacement worker %i' % cpid)
-                    self.sandboxes[cpid] = slot
+                    self.sandboxes[cpid] = sandbox
                 else:  # pragma: no cover
-                    self.spawn().run()
-                    exit(0)
+                    with Worker.sandbox(sandbox):
+                        os.chdir(sandbox)
+                        self.spawn(sandbox=sandbox).run()
+                        exit(0)
         finally:
             self.stop(signal.SIGKILL)
 

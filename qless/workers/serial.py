@@ -1,8 +1,8 @@
 '''A worker that serially pops and complete jobs'''
 
+import os
 import time
 import threading
-from qless import logger
 
 from . import Worker
 
@@ -13,6 +13,9 @@ class SerialWorker(Worker):
         Worker.__init__(self, *args, **kwargs)
         # The jid that we're working on at the moment
         self.jid = None
+        # This is the sandbox we use
+        self.sandbox = kwargs.pop(
+            'sandbox', os.path.join(os.getcwd(), 'qless-py-workers'))
 
     def kill(self, jid):
         '''The best way to do this is to fall on our sword'''
@@ -36,7 +39,9 @@ class SerialWorker(Worker):
                 else:
                     self.jid = job.jid
                     self.title('Working on %s (%s)' % (job.jid, job.klass_name))
-                    job.process()
+                    with Worker.sandbox(self.sandbox):
+                        job.sandbox = self.sandbox
+                        job.process()
                 if self.shutdown:
                     break
         finally:

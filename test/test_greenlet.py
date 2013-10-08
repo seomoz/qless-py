@@ -7,7 +7,6 @@ import time
 import gevent
 
 # The stuff we're actually testing
-import qless
 from qless.workers.greenlet import GeventWorker
 
 
@@ -16,6 +15,7 @@ class GeventJob(object):
     @staticmethod
     def foo(job):
         '''Dummy job'''
+        job.data['sandbox'] = job.sandbox
         job.complete()
 
 
@@ -57,6 +57,9 @@ class TestWorker(TestQless):
         self.worker.run()
         states = [self.client.jobs[jid].state for jid in jids]
         self.assertEqual(states, ['complete'] * 5)
+        sandboxes = [self.client.jobs[jid].data['sandbox'] for jid in jids]
+        for sandbox in sandboxes:
+            self.assertIn('qless-py-workers/greenlet-0', sandbox)
 
     def test_sleeps(self):
         '''Make sure the client sleeps if there aren't jobs to be had'''

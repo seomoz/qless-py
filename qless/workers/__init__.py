@@ -5,8 +5,12 @@
 import os
 import code
 import signal
+import shutil
 import itertools
 import traceback
+from contextlib import contextmanager
+
+# Internal imports
 from qless import logger
 from qless.exceptions import LostLockException
 
@@ -48,6 +52,33 @@ class Worker(object):
             # Filter out the items in jobs that are Nones
             jobs[index] = [j for j in jobs[index] if j != None]
         return jobs
+
+    @classmethod
+    def clean(cls, path):
+        '''Clean up all the files in a provided path'''
+        for pth in os.listdir(path):
+            pth = os.path.abspath(os.path.join(path, pth))
+            if os.path.isdir(pth):
+                logger.debug('Removing directory %s' % pth)
+                shutil.rmtree(pth)
+            else:
+                logger.debug('Removing file %s' % pth)
+                os.remove(pth)
+
+    @classmethod
+    @contextmanager
+    def sandbox(cls, path):
+        '''Ensures path exists before yielding, cleans up after'''
+        # Ensure the path exists and is clean
+        if not os.path.exists(path):
+            logger.debug('Making %s' % path)
+            os.makedirs(path)
+        cls.clean(path)
+        # Then yield, but make sure to clean up the directory afterwards
+        try:
+            yield
+        finally:
+            cls.clean(path)
 
     def __init__(self, queues, client, **kwargs):
         self.client = client
@@ -130,12 +161,16 @@ class Worker(object):
         for sig in signals:
             signal.signal(getattr(signal, 'SIG' + sig), self.handler)
 
+    def stop(self):
+        '''Mark this for shutdown'''
+        self.shutdown = True
+
     # Unfortunately, for most of this, it's not really practical to unit test
     def handler(self, signum, frame):  # pragma: no cover
         '''Signal handler for this process'''
         if signum == signal.SIGQUIT:
             # QUIT - Finish processing, but don't do any more work after that
-            self.shutdown = True
+            self.stop()
         elif signum == signal.SIGUSR1:
             # USR1 - Print the backtrace
             message = ''.join(traceback.format_stack(frame))

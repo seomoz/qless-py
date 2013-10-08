@@ -74,15 +74,15 @@ os.chdir(args.workdir)
 
 # Build up the kwargs that we'll pass to the worker
 kwargs = {
+    'workers': args.workers,
     'interval': args.interval,
     'resume': args.resume
 }
 
 # If we're supposed to use greenlets...
 if args.greenlets:
-    from qless.workers.greenlet import GeventWorker
     kwargs.update({
-        'klass': GeventWorker,
+        'klass': 'qless.workers.greenlet.GeventWorker',
         'greenlets': args.greenlets
     })
 
