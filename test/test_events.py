@@ -18,8 +18,8 @@ class TestEvents(TestQless):
 
         func.count = 0
         self.client.events.on('popped', func)
-        self.client.queues['foo'].pop()
-        self.client.events.next()
+        with self.client.events.thread():
+            self.client.queues['foo'].pop()
         self.assertEqual(func.count, 1)
 
     def test_off(self):
@@ -37,9 +37,8 @@ class TestEvents(TestQless):
         self.client.events.on('popped', popped)
         self.client.events.on('completed', completed)
         self.client.events.off('popped')
-        self.client.queues['foo'].pop().complete()
-        self.client.events.next()
-        self.client.events.next()
+        with self.client.events.thread():
+            self.client.queues['foo'].pop().complete()
         self.assertEqual(popped.count, 0)
         self.assertEqual(completed.count, 1)
 

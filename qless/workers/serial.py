@@ -2,7 +2,6 @@
 
 import os
 import time
-import threading
 
 from . import Worker
 
@@ -27,9 +26,7 @@ class SerialWorker(Worker):
         # Register our signal handlers
         self.signals()
 
-        thread = threading.Thread(target=self.listen)
-        try:
-            thread.start()
+        with self.listener():
             for job in self.jobs():
                 # If there was no job to be had, we should sleep a little bit
                 if not job:
@@ -44,5 +41,3 @@ class SerialWorker(Worker):
                         job.process()
                 if self.shutdown:
                     break
-        finally:
-            thread.join()

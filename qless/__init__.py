@@ -105,6 +105,7 @@ class Workers(object):
         result['stalled'] = result['stalled'] or []
         return result
 
+
 class Queues(object):
     '''Class for accessing queues lazily'''
     def __init__(self, clnt):
@@ -120,54 +121,6 @@ class Queues(object):
     def __getitem__(self, queue_name):
         '''Get a queue object associated with the provided queue name'''
         return Queue(queue_name, self.client, self.client.worker_name)
-
-
-class Events(object):
-    '''A class for handling pubsub events'''
-    namespace = 'ql'
-
-    def __init__(self, clnt):
-        self._pubsub = clnt.redis.pubsub()
-        self._callbacks = dict(
-            (k, None) for k in (
-                'canceled', 'completed', 'failed', 'popped', 'stalled', 'put',
-                'track', 'untrack')
-        )
-        for key in self._callbacks.keys():
-            self._pubsub.subscribe(self.namespace + ':' + key)
-        self._pubsub.listen().next()
-
-    def next(self):
-        '''Get the next message and run the associated callback'''
-        message = self._pubsub.listen().next()
-        while message['type'] != 'message':
-            message = self._pubsub.listen().next()
-
-        logger.debug('Message: %s' % message)
-        # Strip off the 'namespace' from the channel
-        channel = message['channel'][(len(self.namespace) + 1):]
-        func = self._callbacks.get(channel)
-        if func:
-            func(message['data'])
-
-    def listen(self):  # pragma: no cover
-        '''Listen for events as they come in'''
-        try:
-            while True:
-                self.next()
-        except redis.ConnectionError:
-            pass
-
-    def on(self, evt, func):
-        '''Set a callback handler for a pubsub event'''
-        if evt not in self._callbacks:
-            raise NotImplementedError('callback "%s"' % evt)
-        else:
-            self._callbacks[evt] = func
-
-    def off(self, evt):
-        '''Deactivate the callback for a pubsub event'''
-        return self._callbacks.pop(evt, None)
 
 
 class Client(object):
@@ -190,7 +143,7 @@ class Client(object):
 
     def __getattr__(self, key):
         if key == 'events':
-            self.events = Events(self)
+            self.events = Events(self.redis)
             return self.events
         raise AttributeError('%s has no attribute %s' % (
             self.__class__.__module__ + '.' + self.__class__.__name__, key))
@@ -222,3 +175,4 @@ class Client(object):
 from .job import Job, RecurringJob
 from .queue import Queue
 from .config import Config
+from .listener import Events

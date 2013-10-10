@@ -8,11 +8,12 @@ import signal
 import shutil
 import itertools
 import traceback
+import threading
 from contextlib import contextmanager
 
 # Internal imports
-from qless import logger
-from qless.exceptions import LostLockException
+from qless.listener import Listener
+from qless import logger, exceptions
 
 # Try to use the fast json parser
 try:
@@ -123,7 +124,7 @@ class Worker(object):
             try:
                 if job.heartbeat():
                     yield job
-            except LostLockException:
+            except exceptions.LostLockException:
                 logger.exception('Cannot resume %s' % job.jid)
         while True:
             seen = False
@@ -135,22 +136,29 @@ class Worker(object):
             if not seen:
                 yield None
 
-    def listen(self):
-        '''Listen for pubsub messages relevant to this worker'''
-        logger.info('Listening on pubsub')
-        pubsub = self.client.redis.pubsub()
-        pubsub.subscribe(['ql:w:' + self.client.worker_name])
-        for message in pubsub.listen():
-            if message['type'] != 'message':
-                continue
+    @contextmanager
+    def listener(self):
+        '''Listen for pubsub messages relevant to this worker in a thread'''
+        channels = ['ql:w:' + self.client.worker_name]
+        listener = Listener(self.client.redis, channels)
+        print 'Self: %s' % self
+        thread = threading.Thread(target=self.listen, args=(listener,))
+        thread.start()
+        try:
+            yield
+        finally:
+            listener.unlisten()
+            thread.join()
 
-            # If anything has happened to affect our ownership of a job, we
-            # should kill that worker
-            data = json.loads(message['data'])
-            if data['event'] in ('canceled', 'lock_lost', 'put'):
-                jid = data['jid']
-                logger.warn('Lost ownerhsip of job %s' % jid)
-                self.kill(jid)
+    def listen(self, listener):
+        '''Listen for events that affect our ownership of a job'''
+        for message in listener.listen():
+            try:
+                data = json.loads(message['data'])
+                if data['event'] in ('canceled', 'lock_lost', 'put'):
+                    self.kill(data['jid'])
+            except:
+                logger.exception('Pubsub error')
 
     def kill(self, jid):
         '''Stop processing the provided jid'''

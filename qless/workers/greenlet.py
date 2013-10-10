@@ -21,7 +21,6 @@ class GeventWorker(Worker):
         # A list of the sandboxes that we'll use
         self.sandbox = kwargs.pop(
             'sandbox', os.path.join(os.getcwd(), 'qless-py-workers'))
-        print 'Using sandbox %s' % self.sandbox
         self.sandboxes = [
             os.path.join(self.sandbox, 'greenlet-%i' % i) for i in range(count)]
 
@@ -40,9 +39,8 @@ class GeventWorker(Worker):
     def kill(self, jid):
         '''Stop the greenlet processing the provided jid'''
         greenlet = self.greenlets.get(jid)
-        if greenlet == None:
-            logger.warn('Worker for %s already dead' % jid)
-        else:
+        if greenlet != None:
+            logger.warn('Lost ownership of %s' % jid)
             greenlet.kill()
 
     @classmethod
@@ -60,27 +58,27 @@ class GeventWorker(Worker):
         self.patch()
 
         # Start listening
-        gevent.spawn(self.listen)
-        try:
-            generator = self.jobs()
-            while not self.shutdown:
-                self.pool.wait_available()
-                job = generator.next()
-                if job:
-                    # For whatever reason, doing imports within a greenlet
-                    # (there's one implicitly invoked in job.process), was
-                    # throwing exceptions. The hacky way to get around this
-                    # is to force the import to happen before the greenlet
-                    # is spawned.
-                    job.klass
-                    greenlet = gevent.Greenlet(self.process, job)
-                    self.greenlets[job.jid] = greenlet
-                    self.pool.start(greenlet)
-                else:
-                    logger.debug('Sleeping for %fs' % self.interval)
-                    gevent.sleep(self.interval)
-        except StopIteration:
-            logger.info('Exhausted jobs')
-        finally:
-            logger.info('Waiting for greenlets to finish')
-            self.pool.join()
+        with self.listener():
+            try:
+                generator = self.jobs()
+                while not self.shutdown:
+                    self.pool.wait_available()
+                    job = generator.next()
+                    if job:
+                        # For whatever reason, doing imports within a greenlet
+                        # (there's one implicitly invoked in job.process), was
+                        # throwing exceptions. The hacky way to get around this
+                        # is to force the import to happen before the greenlet
+                        # is spawned.
+                        job.klass
+                        greenlet = gevent.Greenlet(self.process, job)
+                        self.greenlets[job.jid] = greenlet
+                        self.pool.start(greenlet)
+                    else:
+                        logger.debug('Sleeping for %fs' % self.interval)
+                        gevent.sleep(self.interval)
+            except StopIteration:
+                logger.info('Exhausted jobs')
+            finally:
+                logger.info('Waiting for greenlets to finish')
+                self.pool.join()

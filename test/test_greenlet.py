@@ -32,7 +32,7 @@ class PatchedGeventWorker(GeventWorker):
         for _ in xrange(5):
             yield generator.next()
 
-    def listen(self):
+    def listen(self, _):
         '''Don't actually listen for pubsub events'''
         pass
 

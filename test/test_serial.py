@@ -43,7 +43,7 @@ class Worker(SerialWorker):
 
 class NoListenWorker(Worker):
     '''A worker that just won't listen'''
-    def listen(self):
+    def listen(self, _):
         '''Don't listen for lost locks'''
         pass
 
@@ -106,3 +106,10 @@ class TestWorker(TestQless):
         # If this tests runs to completion, it has succeeded
         worker = SerialWorker([], self.client)
         worker.kill('foo')
+
+    def test_shutdown(self):
+        '''We should be able to shutdown a serial worker'''
+        # If this test finishes, it passes
+        worker = SerialWorker([], self.client, interval=0.1)
+        worker.stop()
+        worker.run()
