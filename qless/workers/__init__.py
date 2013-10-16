@@ -6,6 +6,7 @@ import os
 import code
 import signal
 import shutil
+import logging
 import itertools
 import traceback
 import threading
@@ -103,6 +104,8 @@ class Worker(object):
         self.interval = kwargs.get('interval', 60)
         # To mark whether or not we should shutdown after work is done
         self.shutdown = False
+        # Log directory
+        self.logdir = kwargs.get('logdir')
 
     def resumable(self):
         '''Find all the jobs that we'd previously been working on'''
@@ -195,3 +198,15 @@ class Worker(object):
             message = ''.join(traceback.format_stack(frame))
             message = 'Traceback:\n%s' % message
             code.InteractiveConsole(data).interact(message)
+        elif hasattr(signal, 'SIGRTMAX'):
+            # Only Linux has SIGRTMAX
+            if signum == (signal.SIGRTMAX):
+                # Run garbage collection
+                import gc
+                logger.warn('Running garbage collection...')
+                logger.warn('Collected: %i unreachable objects' % gc.collect())
+            elif signum == (signal.SIGRTMAX - 1):
+                # Get some objgraph statistics
+                import objgraph
+                logger.warn(
+                    'Most common types: %s' % objgraph.most_common_types())
