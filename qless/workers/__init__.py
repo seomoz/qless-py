@@ -171,6 +171,9 @@ class Worker(object):
         '''Register our signal handler'''
         for sig in signals:
             signal.signal(getattr(signal, 'SIG' + sig), self.handler)
+        if hasattr(signal, 'SIGRTMAX'):
+            signal.signal(signal.SIGRTMAX, self.handler)
+            signal.signal(signal.SIGRTMAX - 1, self.handler)
 
     def stop(self):
         '''Mark this for shutdown'''
