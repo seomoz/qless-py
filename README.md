@@ -589,3 +589,73 @@ necessary to upgrade your `qless-web` install if you're using it.
 	should provide a single `host` argument of a Redis URL format. For example,
 	`redis://user:auth@host:port/db`. Many of these paremeters are optional, but
 	it seems to be the convention recently.
+
+Upgrading to qless-py 0.10.0
+============================
+Some notes, instructions and potential road blocks to the upgrade. This version
+has much better coverage, and a few added features, including stalled job
+preemption, pauseable queues, unified sandboxing and the ability to use the
+cleaner web interface.
+
+Road Blocks
+===========
+Before we talk about how to install the updated client, here are a couple
+potential road blocks that will need to be addressed before you can make the
+switch.
+
+Sandboxes
+---------
+If you were using sandboxes (if using the non-greenlet client) and relying on
+using the current working directory as the sandbox, that interface has been
+done away with. The replacement is that each job comes with a `sandbox`
+attribute which is guaranteed to be a directory that exists and empty at the
+start of the job, and which is cleaned up after the job. It's a great place for
+temporary files. __This only applies if you are running a qless-worker, and not
+if you are using the qless client directly to work on jobs.__
+
+The directories are made up of subdirectories under the directory provided as
+`--workdir`, defaulting to the current directory.
+
+Client Rename
+-------------
+If you are using the `qless` client directly, all instances of `qless.client`
+will have to change to `qless.Client`. It was an unfortunate mistake that it was
+ever named `client` to begin with, but hopefully this change won't be painful.
+
+Redis Server Spec
+-----------------
+There was a feature request to be able to provide redis auth credentials, and
+rather than support any new attributes to the redis client that might come
+along, we'll now use a [redis url](http://redis-py.readthedocs.org/en/latest/#redis.StrictRedis.from_url).
+
+For example:
+
+```python
+# Instead of this
+client = qless.Client(host='foo', port=6380)
+# Now it's this
+client = qless.Client(url='redis://foo:6380')
+```
+
+This allows users to provide auth, select a database, etc. Remember to change
+this in __worker invocations__ and __config files__.
+
+
+Installation
+============
+With an existing copy of `qless-py` checked out
+
+```bash
+# Get the most recent version
+git fetch
+git checkout v0.10.0
+
+# Checkout, update and build the submodule
+git submodule init
+git submodule update
+make -C qless/qless-code
+
+# Install dependencies and then qless
+sudo pip install -r requirements.txt
+sudo python setup.py install
+```
