@@ -1,9 +1,10 @@
-qless
+qless [![Build Status](https://travis-ci.org/seomoz/qless-py.png)](https://travis-ci.org/seomoz/qless-py)
 =====
 Qless is a powerful `Redis`-based job queueing system inspired by
 [resque](https://github.com/defunkt/resque#readme),
 but built on a collection of Lua scripts, maintained in the
-[qless-core](https://github.com/seomoz/qless-core) repo.
+[qless-core](https://github.com/seomoz/qless-core) repo. Be sure to check the
+changelog below.
 
 Philosophy and Nomenclature
 ===========================
@@ -230,30 +231,34 @@ qless-py-worker --import my.really.bigModule
 
 Filesystem
 ----------
-Each worker runs in a sandbox directory that:
+Previous versions of `qless-py` included a feature to have each worker process
+run in its own sandbox directory. We've removed this feature because since
+greenlets can't run in their own directory, the 'regular' and greenlet workers
+behave differently.
 
-1. Clobbers any files in it left _after_ running a job
-1. Clobbers any files in it _before_ running a job
+In lieu of this behavior, each child process runs in its own sandboxed directory
+and each job is given a `sandbox` attribute which is the name of a directory for
+the sole use of that job. It's guaranteed to be clean by the time the job is
+performed, and it cleaned up afterwards.
 
-The worker runs in the context of that directory, so when you create files
-like this,
-
-```python
-with file('foo.txt') as f:
-	...
-```
-
-they get created in the worker's sandbox. This can be useful for storing
-temporary files, but it also means that any files that need to persist should
-either be put somewhere specific, or uploaded somewhere, etc. These sandboxes
-have the form `<workdir>/qless-py-workers/sandbox-<k>/`, so when running the
-worker, you can specify a particular working directory as the base,
+For example, if you invoke:
 
 ```bash
-qless-py-worker --workdir /home/foo/awesome-project
+qless-py-worker --workers 4 --greenlets 5 --workdir foo
 ```
 
-which would yield sandboxes `/home/foo/awesome-project/qless-py-workers/sandbox-<k>`.
+Then four child processes will be spawned using the directories:
+
+```
+foo/qless-py-workers/sandbox-{0,1,2,3}
+```
+
+The jobs run by the greenlets in the first process are given their own sandboxes
+of the form:
+
+```
+foo/qless-py-workers/sandbox-0/greenlet-{0,1,2,3,4}
+```
 
 Gevent
 ------
@@ -265,6 +270,31 @@ qless to create a pool of greenlets to run you job inside each process. To run
 ```bash
 qless-py-worker --workers 5 --greenlets 50
 ```
+
+Signals
+-------
+With a worker running, you can send signals to child processes to:
+
+- `USR1` - Get the current stack trace in that worker
+- `USR2` - Enter a debugger in that worker
+
+So, for example, if one of the worker child processes is `PID 1234`, then you
+can invoke `kill -USR1 1234` to get the backtrace in the logs (and console
+output).
+
+Resuming Jobs
+-------------
+This is an __experimental__ feature, but you can start workers `--resume` flag
+to have the worker begin its processing with the jobs it left off with. For
+instance, during deployments, it's common to restart the worker processes, and
+the `--resume` flag has the worker first perform a check with `qless` to see
+which jobs it had last been running (and still has locks for).
+
+This flag should be used with some caution. In particular, if two workers are
+running with the same worker name, then this should not be used. The reason is
+that through the `qless` interface, it's impossible to differentiate the two,
+and currently-running jobs may be confused with jobs that were simply dropped
+when the worker was stopped.
 
 Debugging / Developing
 ======================
@@ -537,3 +567,95 @@ It's available in the [`qless`](https://github.com/seomoz/qless) library as a
 mountable [`Sinatra`](http://www.sinatrarb.com/) app. The web app is language
 agnostic and was one of the major desires out of this project, so you should
 consider using it even if you're not planning on using the Ruby client.
+
+Changelog
+=========
+Things that have changed over time.
+
+v0.10.0
+-------
+The major change was the switch to `unified` qless. This change is
+semi-incompatibile. In particular, it changes the job history format but the new
+version knows how to convert the old format forward. Upgrades to your workers
+should be made from the end of pipelines towards the start. It will also be
+necessary to upgrade your `qless-web` install if you're using it.
+
+- Preempts workers running jobs for which they've lost their lock
+- Improved coverage (98%, up from 71%), all of which was worker code
+- Debugging signals
+- Resumable workers
+- Redis URL interface. When specifying a qless client, the default is still to
+	point to `localhost:6379`, but rather than specify `host` and `port`, you
+	should provide a single `host` argument of a Redis URL format. For example,
+	`redis://user:auth@host:port/db`. Many of these paremeters are optional, but
+	it seems to be the convention recently.
+
+Upgrading to qless-py 0.10.0
+============================
+Some notes, instructions and potential road blocks to the upgrade. This version
+has much better coverage, and a few added features, including stalled job
+preemption, pauseable queues, unified sandboxing and the ability to use the
+cleaner web interface.
+
+Road Blocks
+===========
+Before we talk about how to install the updated client, here are a couple
+potential road blocks that will need to be addressed before you can make the
+switch.
+
+Sandboxes
+---------
+If you were using sandboxes (if using the non-greenlet client) and relying on
+using the current working directory as the sandbox, that interface has been
+done away with. The replacement is that each job comes with a `sandbox`
+attribute which is guaranteed to be a directory that exists and empty at the
+start of the job, and which is cleaned up after the job. It's a great place for
+temporary files. __This only applies if you are running a qless-worker, and not
+if you are using the qless client directly to work on jobs.__
+
+The directories are made up of subdirectories under the directory provided as
+`--workdir`, defaulting to the current directory.
+
+Client Rename
+-------------
+If you are using the `qless` client directly, all instances of `qless.client`
+will have to change to `qless.Client`. It was an unfortunate mistake that it was
+ever named `client` to begin with, but hopefully this change won't be painful.
+
+Redis Server Spec
+-----------------
+There was a feature request to be able to provide redis auth credentials, and
+rather than support any new attributes to the redis client that might come
+along, we'll now use a [redis url](http://redis-py.readthedocs.org/en/latest/#redis.StrictRedis.from_url).
+
+For example:
+
+```python
+# Instead of this
+client = qless.Client(host='foo', port=6380)
+# Now it's this
+client = qless.Client(url='redis://foo:6380')
+```
+
+This allows users to provide auth, select a database, etc. Remember to change
+this in __worker invocations__ and __config files__.
+
+
+Installation
+============
+With an existing copy of `qless-py` checked out
+
+```bash
+# Get the most recent version
+git fetch
+git checkout v0.10.0
+
+# Checkout, update and build the submodule
+git submodule init
+git submodule update
+make -C qless/qless-code
+
+# Install dependencies and then qless
+sudo pip install -r requirements.txt
+sudo python setup.py install
+```
