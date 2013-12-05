@@ -166,9 +166,9 @@ get run
 ```python
 import qless
 # Connecting to localhost on 6379
-client = qless.client()
+client = qless.Client()
 # Connecting to a remote machine
-client = qless.client(host='foo.bar.com', port=1234)
+client = qless.Client('redis://foo.bar.com:1234')
 ```
 
 Now, reference a queue, and start putting your gnomes to work:
@@ -314,7 +314,7 @@ enqueue a single job while the worker is running:
 	# In another terminal...
 	>>> import qless
 	>>> import awesomeproject
-	>>> qless.client().queues['foo'].put(awesomeproject.Job, {'key': 'value'))
+	>>> qless.Client().queues['foo'].put(awesomeproject.Job, {'key': 'value'))
 
 From there, I watch the output on the worker, adjust my job class, save it,
 watch again, etc., but __without restarting the worker__ -- in general it
