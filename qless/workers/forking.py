@@ -97,5 +97,9 @@ class ForkingWorker(Worker):
         '''Signal handler for this process'''
         if signum in (signal.SIGTERM, signal.SIGINT, signal.SIGQUIT):
             for cpid in self.sandboxes.keys():
-                os.kill(cpid, signum)
+                try:
+                    os.kill(cpid, signum)
+                except OSError:  # pragma: no cover
+                    logger.exception(
+                        'Failed to send %s to %s...' % (signum, cpid))
             exit(0)
