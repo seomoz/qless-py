@@ -87,7 +87,7 @@ into jobs. Jobs are described essentially by two pieces of information -- a
 class` and `data`. The class should have static methods that know how to
 process this type of job depending on the queue it's in. For those thrown for
 a loop by this example, it's in reference to a
-[South Park](http://en.wikipedia.org/wiki/Gnomes_(South_Park\)) episode with a
+[South Park](http://en.wikipedia.org/wiki/Gnomes_%28South_Park%29#Plot) episode where a
 group of enterprising gnomes set on world domination through three steps: 1)
 collect underpants, 2) ? 3) profit!
 
