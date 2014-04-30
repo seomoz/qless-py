@@ -4,7 +4,7 @@ from distutils.core import setup
 
 setup(
     name                 = 'qless-py',
-    version              = '0.10.0',
+    version              = '0.10.1',
     description          = 'Redis-based Queue Management',
     long_description     = '''
 Redis-based queue management, with heartbeating, job tracking,
