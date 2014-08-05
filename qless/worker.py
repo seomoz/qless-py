@@ -125,10 +125,10 @@ class Worker(object):
             p = os.path.join(self.sandbox, p)
             if os.path.isdir(p):
                 logger.info('Removing tree %s...' % p)
-                shutil.rmtree(p)
+                # shutil.rmtree(p)
             else:
                 logger.info('Removing file %s...' % p)
-                os.remove(p)
+                # os.remove(p)
     
     def setproctitle(self, message):
         base = 'qless-py-worker [%s] ' % ','.join(q.name for q in self.queues)
