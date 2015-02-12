@@ -1,6 +1,7 @@
+*.pyc
+*~
+.coverage*
 build/*
 dist/*
-qless_py.egg-info/*
-*.pyc
 htmlcov/*
-.coverage*
+qless_py.egg-info/*
