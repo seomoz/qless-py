@@ -56,7 +56,7 @@ class Events(Listener):
     def listen(self):
         '''Listen for events'''
         for message in Listener.listen(self):
-            logger.debug('Message: %s' % message)
+            logger.debug('Message: %s', message)
             # Strip off the 'namespace' from the channel
             channel = message['channel'][len(self.namespace):]
             func = self._callbacks.get(channel)
