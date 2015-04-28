@@ -135,34 +135,34 @@ class Job(BaseJob):
                 getattr(self.klass, 'process', None))
         except Exception as exc:
             # We failed to import the module containing this class
-            logger.exception('Failed to import %s' % self.klass_name)
+            logger.exception('Failed to import %s', self.klass_name)
             return self.fail(self.queue_name + '-' + exc.__class__.__name__,
                 'Failed to import %s' % self.klass_name)
 
         if method:
             if isinstance(method, types.FunctionType):
                 try:
-                    logger.info('Processing %s in %s' % (
-                        self.jid, self.queue_name))
+                    logger.info('Processing %s in %s',
+                        self.jid, self.queue_name)
                     method(self)
-                    logger.info('Completed %s in %s' % (
-                        self.jid, self.queue_name))
+                    logger.info('Completed %s in %s',
+                        self.jid, self.queue_name)
                 except Exception as exc:
                     # Make error type based on exception type
-                    logger.exception('Failed %s in %s: %s' % (
-                        self.jid, self.queue_name, repr(method)))
+                    logger.exception('Failed %s in %s: %s',
+                        self.jid, self.queue_name, repr(method))
                     self.fail(self.queue_name + '-' + exc.__class__.__name__,
                         traceback.format_exc())
             else:
                 # Or fail with a message to that effect
-                logger.error('Failed %s in %s : %s is not static' % (
-                    self.jid, self.queue_name, repr(method)))
+                logger.error('Failed %s in %s : %s is not static',
+                    self.jid, self.queue_name, repr(method))
                 self.fail(self.queue_name + '-method-type',
                     repr(method) + ' is not static')
         else:
             # Or fail with a message to that effect
-            logger.error('Failed %s : %s is missing a method "%s" or "process"'
-                % (self.jid, self.klass_name, self.queue_name))
+            logger.error('Failed %s : %s is missing a method "%s" or "process"',
+                         self.jid, self.klass_name, self.queue_name)
             self.fail(self.queue_name + '-method-missing', self.klass_name +
                 ' is missing a method "' + self.queue_name + '" or "process"')
 
@@ -171,8 +171,8 @@ class Job(BaseJob):
         a worker has been given this job, then that worker's attempts to
         heartbeat that job will fail. Like ``Queue.put``, this accepts a
         delay, and dependencies'''
-        logger.info('Moving %s to %s from %s' % (
-            self.jid, queue, self.queue_name))
+        logger.info('Moving %s to %s from %s',
+            self.jid, queue, self.queue_name)
         return self.client('put', queue, self.jid, self.klass_name,
             json.dumps(self.data), delay, 'depends', json.dumps(depends or [])
         )
@@ -182,28 +182,28 @@ class Job(BaseJob):
         queue. Like ``Queue.put`` and ``move``, it accepts a delay, and
         dependencies'''
         if nextq:
-            logger.info('Advancing %s to %s from %s' % (
-                self.jid, nextq, self.queue_name))
+            logger.info('Advancing %s to %s from %s',
+                self.jid, nextq, self.queue_name)
             return self.client('complete', self.jid, self.client.worker_name,
                 self.queue_name, json.dumps(self.data), 'next', nextq,
                 'delay', delay or 0, 'depends', json.dumps(depends or [])
             ) or False
         else:
-            logger.info('Completing %s' % self.jid)
+            logger.info('Completing %s', self.jid)
             return self.client('complete', self.jid, self.client.worker_name,
                 self.queue_name, json.dumps(self.data)) or False
 
     def heartbeat(self):
         '''Renew the heartbeat, if possible, and optionally update the job's
         user data.'''
-        logger.debug('Heartbeating %s (ttl = %s)' % (self.jid, self.ttl))
+        logger.debug('Heartbeating %s (ttl = %s)', self.jid, self.ttl)
         try:
             self.expires_at = float(self.client('heartbeat', self.jid,
             self.client.worker_name, json.dumps(self.data)) or 0)
         except QlessException:
             print 'Raising exception'
             raise LostLockException(self.jid)
-        logger.debug('Heartbeated %s (ttl = %s)' % (self.jid, self.ttl))
+        logger.debug('Heartbeated %s (ttl = %s)', self.jid, self.ttl)
         return self.expires_at
 
     def fail(self, group, message):
@@ -224,7 +224,7 @@ class Job(BaseJob):
         that job will fail. Failed jobs are kept until they are canceled or
         completed. __Returns__ the id of the failed job if successful, or
         `False` on failure.'''
-        logger.warn('Failing %s (%s): %s' % (self.jid, group, message))
+        logger.warn('Failing %s (%s): %s', self.jid, group, message)
         return self.client('fail', self.jid, self.client.worker_name, group,
             message, json.dumps(self.data)) or False
 
