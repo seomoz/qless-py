@@ -5,3 +5,4 @@ build/*
 dist/*
 htmlcov/*
 qless_py.egg-info/*
+.vagrant
