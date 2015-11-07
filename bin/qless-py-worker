@@ -25,7 +25,8 @@ parser.add_argument('-d', '--workdir', default='.',
     help='The base work directory path')
 
 # Options specific to the worker we're instantiating
-parser.add_argument('-w', '--workers', default=psutil.NUM_CPUS, type=int,
+num_cpus = psutil.NUM_CPUS if hasattr(psutil, 'NUM_CPUS') else psutil.cpu_count()
+parser.add_argument('-w', '--workers', default=num_cpus, type=int,
     help='How many processes to run. Set to 0 to use all available cores')
 parser.add_argument('-q', '--queue', action='append', default=[],
     help='The queues to pull work from')
