@@ -20,7 +20,10 @@ class Config(object):
         result = self._client('config.get', option)
         if not result:
             return None
-        return json.loads(result)
+        try:
+            return json.loads(result)
+        except TypeError:
+            return result
 
     def __setitem__(self, option, value):
         return self._client('config.set', option, value)
