@@ -52,7 +52,7 @@ class TestConfig(TestQless):
     def test_iter(self):
         '''We can iterate over the config'''
         self.assertEqual(
-            [key for key in self.client.config], self.client.config.keys())
+            set([key for key in self.client.config]), set(self.client.config.keys()))
 
     def test_get(self):
         '''We can use dictionary-style get'''
