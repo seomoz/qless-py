@@ -9,6 +9,11 @@ from . import Worker
 from qless import logger, util
 from .serial import SerialWorker
 
+try:
+    NUM_CPUS = psutil.cpu_count()
+except AttributeError:
+    NUM_CPUS = psutil.NUM_CPUS
+
 
 class ForkingWorker(Worker):
     '''A worker that forks child processes'''
@@ -17,7 +22,7 @@ class ForkingWorker(Worker):
         # Worker class to use
         self.klass = self.kwargs.pop('klass', SerialWorker)
         # How many children to launch
-        self.count = self.kwargs.pop('workers', 0) or psutil.NUM_CPUS
+        self.count = self.kwargs.pop('workers', 0) or NUM_CPUS
         # A dictionary of child pids to information about them
         self.sandboxes = {}
         # Whether or not we're supposed to shutdown
