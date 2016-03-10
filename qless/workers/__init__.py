@@ -47,7 +47,7 @@ class Worker(object):
     @classmethod
     def divide(cls, jobs, count):
         '''Divide up the provided jobs into count evenly-sized groups'''
-        jobs = list(zip(*itertools.izip_longest(*[iter(jobs)] * count)))
+        jobs = list(zip(*_compat.izip_longest(*[iter(jobs)] * count)))
         # If we had no jobs to resume, then we get an empty list
         jobs = jobs or [()] * count
         for index in range(count):
