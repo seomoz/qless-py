@@ -9,7 +9,7 @@ import traceback
 import simplejson as json
 
 # Internal imports
-from qless import logger
+from qless import logger, _compat
 from qless.exceptions import LostLockException, QlessException
 
 
@@ -71,7 +71,7 @@ class BaseJob(object):
         if hasattr(mod, '__file__'):
             mtime = os.stat(mod.__file__).st_mtime
             if BaseJob._loaded[klass] < mtime:
-                mod = reload(mod)
+                mod = _compat.reload(mod)
 
         return getattr(mod, klass.rpartition('.')[2])
 
