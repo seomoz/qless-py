@@ -14,7 +14,7 @@ from contextlib import contextmanager
 
 # Internal imports
 from qless.listener import Listener
-from qless import logger, exceptions
+from qless import logger, exceptions, _compat
 
 # Try to use the fast json parser
 try:
@@ -87,7 +87,7 @@ class Worker(object):
         # This should accept either queue objects, or string queue names
         self.queues = []
         for queue in queues:
-            if isinstance(queue, basestring):
+            if isinstance(queue, _compat.basestring):
                 self.queues.append(self.client.queues[queue])
             else:
                 self.queues.append(queue)

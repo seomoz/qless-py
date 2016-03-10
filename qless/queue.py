@@ -4,6 +4,7 @@
 
 import time
 import uuid
+from qless import _compat
 from qless.job import Job
 import simplejson as json
 
@@ -63,7 +64,7 @@ class Queue(object):
 
     def class_string(self, klass):
         '''Return a string representative of the class'''
-        if isinstance(klass, basestring):
+        if isinstance(klass, _compat.basestring):
             return klass
         return klass.__module__ + '.' + klass.__name__
 
