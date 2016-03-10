@@ -4,6 +4,7 @@
 from common import TestQless
 
 import qless
+from qless._compat import next
 from qless.workers import Worker
 
 # External dependencies
@@ -83,11 +84,11 @@ class TestWorker(TestQless):
         '''We should be able to resume jobs'''
         queue = self.worker.client.queues['foo']
         queue.put('foo', {})
-        job = self.worker.jobs().next()
+        job = next(self.worker.jobs())
         self.assertTrue(isinstance(job, qless.Job))
         # Now, we'll create a new worker and make sure it gets that job first
         worker = Worker(['foo'], self.client, resume=[job])
-        self.assertEqual(worker.jobs().next().jid, job.jid)
+        self.assertEqual(next(worker.jobs()).jid, job.jid)
 
     def test_unresumable(self):
         '''If we can't heartbeat jobs, we should not try to resume it'''
@@ -100,7 +101,7 @@ class TestWorker(TestQless):
         # Now, we'll create a new worker and make sure it gets that job first
         worker = Worker(
             ['foo'], self.client, resume=[self.client.jobs[job.jid]])
-        self.assertEqual(worker.jobs().next(), None)
+        self.assertEqual(next(worker.jobs()), None)
 
     def test_resumable(self):
         '''We should be able to find all the jobs that can be resumed'''
