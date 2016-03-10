@@ -201,7 +201,6 @@ class Job(BaseJob):
             self.expires_at = float(self.client('heartbeat', self.jid,
             self.client.worker_name, json.dumps(self.data)) or 0)
         except QlessException:
-            print 'Raising exception'
             raise LostLockException(self.jid)
         logger.debug('Heartbeated %s (ttl = %s)', self.jid, self.ttl)
         return self.expires_at

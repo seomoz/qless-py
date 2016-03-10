@@ -19,14 +19,14 @@ class Profiler(object):
         '''Print timing stats'''
         results = [(sum(values), len(values), key)
             for key, values in timings.items()]
-        print label
-        print '=' * 65
-        print '%20s => %13s | %8s | %13s' % (
-            'Command', 'Average', '# Calls', 'Total time')
-        print '-' * 65
+        print(label)
+        print('=' * 65)
+        print('%20s => %13s | %8s | %13s' % (
+            'Command', 'Average', '# Calls', 'Total time'))
+        print('-' * 65)
         for total, length, key in sorted(results, reverse=True):
-            print '%20s => %10.5f us | %8i | %10i us' % (
-                key, float(total) / length, length, total)
+            print('%20s => %10.5f us | %8i | %10i us' % (
+                key, float(total) / length, length, total))
 
     def __init__(self, client):
         self._client = self.clone(client)
@@ -78,10 +78,10 @@ class Profiler(object):
     def display(self):
         '''Print the results of this profiling'''
         self.pretty(self._timings, 'Raw Redis Commands')
-        print ''
+        print()
         for key, value in self._commands.items():
             self.pretty(value, 'Qless "%s" Command' % key)
-            print ''
+            print()
 
     def __enter__(self):
         self.start()

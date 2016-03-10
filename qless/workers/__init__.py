@@ -6,6 +6,7 @@ import os
 import code
 import signal
 import shutil
+import sys
 import itertools
 import traceback
 import threading
@@ -141,7 +142,6 @@ class Worker(object):
         '''Listen for pubsub messages relevant to this worker in a thread'''
         channels = ['ql:w:' + self.client.worker_name]
         listener = Listener(self.client.redis, channels)
-        print 'Self: %s' % self
         thread = threading.Thread(target=self.listen, args=(listener,))
         thread.start()
         try:
@@ -183,7 +183,8 @@ class Worker(object):
             # USR1 - Print the backtrace
             message = ''.join(traceback.format_stack(frame))
             message = 'Signaled traceback for %s:\n%s' % (os.getpid(), message)
-            print message
+            sys.stderr.write(message)
+            sys.stderr.write('\n')
             logger.warn(message)
         elif signum == signal.SIGUSR2:
             # USR2 - Enter a debugger

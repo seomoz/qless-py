@@ -29,7 +29,6 @@ class TestClient(TestQless):
         '''Provides access to unfail'''
         jids = map(str, range(10))
         for jid in jids:
-            print 'Popping %s' % jid
             self.client.queues['foo'].put('Foo', {}, jid=jid)
             self.client.queues['foo'].pop().fail('foo', 'bar')
         for jid in jids:
@@ -150,10 +149,8 @@ class Foo(object):
     def process(job):
         '''This is supposed to raise an Exception'''
         if 'valueerror' in job.tags:
-            print 'Raising ValueError'
             raise ValueError('Foo')
         else:
-            print 'Raising Exception'
             raise Exception('Foo')
 
 
