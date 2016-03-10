@@ -121,6 +121,6 @@ class TestWorker(TestQless):
         '''We should be able to divide resumable jobs evenly'''
         items = self.worker.divide(range(100), 7)
         # Make sure we have the same items as output as input
-        self.assertEqual(sorted(itertools.chain(*items)), range(100))
+        self.assertEqual(sorted(itertools.chain(*items)), list(range(100)))
         lengths = [len(batch) for batch in items]
         self.assertLessEqual(max(lengths) - min(lengths), 1)
