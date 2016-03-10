@@ -1,3 +1,7 @@
+all:
+	echo Nothing to do
+
+.PHONY: clean
 clean:
 	# Remove the build
 	sudo rm -rf build dist
@@ -6,10 +10,20 @@ clean:
 	# And lastly, .coverage files
 	find . -name .coverage | xargs rm
 
-nose:
+.PHONY: qless-core
+qless-core:
 	# Ensure qless is built
 	make -C qless/qless-core/
+
+.PHONY: nose
+nose: qless-core
 	rm -rf .coverage
 	nosetests --exe --cover-package=qless --with-coverage --cover-branches -v
 
-test: nose
+.PHONY: nose3
+nose3: qless
+	rm -rf .coverage
+	nosetests3 --exe --cover-package=qless --with-coverage --cover-branches -v
+
+.PHONY: test
+test: nose nose3
