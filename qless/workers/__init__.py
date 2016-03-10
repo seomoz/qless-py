@@ -50,7 +50,7 @@ class Worker(object):
         jobs = list(zip(*itertools.izip_longest(*[iter(jobs)] * count)))
         # If we had no jobs to resume, then we get an empty list
         jobs = jobs or [()] * count
-        for index in xrange(count):
+        for index in range(count):
             # Filter out the items in jobs that are Nones
             jobs[index] = [j for j in jobs[index] if j != None]
         return jobs
