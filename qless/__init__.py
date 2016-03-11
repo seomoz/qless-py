@@ -6,6 +6,7 @@ import pkgutil
 import logging
 import decorator
 import simplejson as json
+import sys
 
 # Internal imports
 from .exceptions import QlessException
@@ -129,6 +130,8 @@ class Client(object):
         import socket
         # This is our unique idenitifier as a worker
         self.worker_name = hostname or socket.gethostname()
+        if sys.version_info[0] >= 3:
+            kwargs['decode_responses'] = True
         # This is just the redis instance we're connected to conceivably
         # someone might want to work with multiple instances simultaneously.
         self.redis = redis.Redis.from_url(url, **kwargs)
