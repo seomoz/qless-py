@@ -4,9 +4,18 @@ before_install:
   - git submodule update --init --recursive
   - sudo apt-get install -y libevent-dev python-dev
 language: python
-python:
-  - "2.7"
-# command to install dependencies
-install: "pip install -r requirements.txt --use-mirrors"
-# command to run tests
-script: make test
+matrix:
+  include:
+    - python: 3.5
+      env: TOXENV=py35
+env:
+  - TOXENV=py26
+  - TOXENV=py27
+  - TOXENV=py33
+  - TOXENV=py34
+install: pip install tox
+script: tox
+cache:
+  directories:
+    - .tox
+    - $HOME/.cache/pip
