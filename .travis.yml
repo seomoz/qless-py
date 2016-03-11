@@ -6,7 +6,6 @@ before_install:
   - sudo apt-get install -y libevent-dev python-all-dev python3-all-dev
 language: python
 env:
-  - TOXENV=py26
   - TOXENV=py27
   - TOXENV=py33
   - TOXENV=py34
