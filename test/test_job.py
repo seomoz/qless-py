@@ -1,5 +1,7 @@
 '''Basic tests about the Job class'''
 
+import sys
+
 from common import TestQless
 from qless.job import Job, BaseJob
 
@@ -188,7 +190,10 @@ class TestJob(TestQless):
         self.client.queues['nonstatic'].pop().process()
         job = self.client.jobs['jid']
         self.assertEqual(job.state, 'failed')
-        self.assertEqual(job.failure['group'], 'nonstatic-method-type')
+        if sys.version_info[0] >= 3:
+            self.assertEqual(job.failure['group'], 'nonstatic-TypeError')
+        else:
+            self.assertEqual(job.failure['group'], 'nonstatic-method-type')
 
     def test_reload(self):
         '''Ensure that nothing blows up if we reload a class'''
