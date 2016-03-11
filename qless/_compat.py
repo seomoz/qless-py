@@ -1,6 +1,5 @@
 # Python3 compatibility
 
-import importlib
 import itertools
 import sys
 
@@ -8,7 +7,13 @@ if sys.version_info[0] >= 3:
     basestring = (bytes, str)
     izip_longest = itertools.zip_longest
     next = next
-    reload = importlib.reload
+
+    if sys.version_info[1] >= 4:
+        import importlib
+        reload = importlib.reload
+    else:
+        import imp
+        reload = imp.reload
 else:
     basestring = basestring
     izip_longest = itertools.izip_longest
