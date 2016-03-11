@@ -90,5 +90,3 @@ class Profiler(object):
     def __exit__(self, typ, value, trace):
         self.stop()
         self.display()
-        if typ:
-            raise typ, value, trace
