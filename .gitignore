@@ -7,3 +7,4 @@ htmlcov/*
 qless_py.egg-info/*
 .vagrant
 MANIFEST
+.tox/
