@@ -29,6 +29,16 @@ class TestQueue(TestQless):
             'waiting': 1
         })
 
+    def test_pause(self):
+        '''Pause/Unpause Queue'''
+        queue = self.client.queues['foo']
+
+        queue.pause()
+        self.assertTrue(queue.counts['paused'])
+
+        queue.unpause()
+        self.assertFalse(queue.counts['paused'])
+
     def test_heartbeat(self):
         '''Provided access to heartbeat configuration'''
         original = self.client.queues['foo'].heartbeat
