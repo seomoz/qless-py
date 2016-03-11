@@ -2,17 +2,15 @@ services:
   - redis-server
 before_install:
   - git submodule update --init --recursive
-  - sudo apt-get install -y libevent-dev python-dev
+  - make qless-core
+  - sudo apt-get install -y libevent-dev python-all-dev python3-all-dev
 language: python
-matrix:
-  include:
-    - python: 3.5
-      env: TOXENV=py35
 env:
   - TOXENV=py26
   - TOXENV=py27
   - TOXENV=py33
   - TOXENV=py34
+  - TOXENV=py35
 install: pip install tox
 script: tox
 cache:
