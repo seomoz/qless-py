@@ -67,6 +67,12 @@ class Queue(object):
             return klass
         return klass.__module__ + '.' + klass.__name__
 
+    def pause(self):
+        return self.client('pause', self.name)
+
+    def unpause(self):
+        return self.client('unpause', self.name)
+
     def put(self, klass, data, priority=None, tags=None, delay=None,
         retries=None, jid=None, depends=None):
         '''Either create a new job in the provided queue with the provided
