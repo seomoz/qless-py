@@ -4,9 +4,11 @@ import os
 import psutil
 import signal
 
+from six import string_types
+
 # Internal imports
 from . import Worker
-from qless import logger, util, _compat
+from qless import logger, util
 from .serial import SerialWorker
 
 try:
@@ -55,7 +57,7 @@ class ForkingWorker(Worker):
         # Apparently there's an issue with importing gevent in the parent
         # process and then using it int he child. This is meant to relieve that
         # problem by allowing `klass` to be specified as a string.
-        if isinstance(self.klass, _compat.basestring):
+        if isinstance(self.klass, string_types):
             self.klass = util.import_class(self.klass)
         return self.klass(self.queues, self.client, **copy)
 

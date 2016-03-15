@@ -25,7 +25,8 @@ stats, notifications, and a whole lot more.''',
         'ps': ['setproctitle']
     },
     install_requires     = [
-        'argparse', 'decorator', 'hiredis', 'redis', 'psutil', 'simplejson'],
+        'argparse', 'decorator', 'hiredis', 'redis', 'psutil', 'six',
+        'simplejson'],
     classifiers          = [
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python :: 2',

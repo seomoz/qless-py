@@ -4,12 +4,12 @@
 from common import TestQless
 
 import qless
-from qless._compat import next
 from qless.workers import Worker
 
 # External dependencies
 import os
 import itertools
+from six import next
 
 
 class TestWorker(TestQless):

@@ -7,14 +7,16 @@ import code
 import signal
 import shutil
 import sys
-import itertools
 import traceback
 import threading
 from contextlib import contextmanager
 
+from six import string_types
+from six.moves import zip_longest
+
 # Internal imports
 from qless.listener import Listener
-from qless import logger, exceptions, _compat
+from qless import logger, exceptions
 
 # Try to use the fast json parser
 try:
@@ -47,7 +49,7 @@ class Worker(object):
     @classmethod
     def divide(cls, jobs, count):
         '''Divide up the provided jobs into count evenly-sized groups'''
-        jobs = list(zip(*_compat.izip_longest(*[iter(jobs)] * count)))
+        jobs = list(zip(*zip_longest(*[iter(jobs)] * count)))
         # If we had no jobs to resume, then we get an empty list
         jobs = jobs or [()] * count
         for index in range(count):
@@ -87,7 +89,7 @@ class Worker(object):
         # This should accept either queue objects, or string queue names
         self.queues = []
         for queue in queues:
-            if isinstance(queue, _compat.basestring):
+            if isinstance(queue, string_types):
                 self.queues.append(self.client.queues[queue])
             else:
                 self.queues.append(queue)

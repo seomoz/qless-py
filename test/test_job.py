@@ -1,6 +1,7 @@
 '''Basic tests about the Job class'''
 
 import sys
+from six import PY3
 
 from common import TestQless
 from qless.job import Job, BaseJob
@@ -190,7 +191,7 @@ class TestJob(TestQless):
         self.client.queues['nonstatic'].pop().process()
         job = self.client.jobs['jid']
         self.assertEqual(job.state, 'failed')
-        if sys.version_info[0] >= 3:
+        if PY3:
             self.assertEqual(job.failure['group'], 'nonstatic-TypeError')
         else:
             self.assertEqual(job.failure['group'], 'nonstatic-method-type')

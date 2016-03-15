@@ -3,9 +3,10 @@
 import os
 import gevent
 import gevent.pool
+from six import next
 
 from . import Worker
-from qless import logger, _compat
+from qless import logger
 
 
 class GeventWorker(Worker):
@@ -63,7 +64,7 @@ class GeventWorker(Worker):
                 generator = self.jobs()
                 while not self.shutdown:
                     self.pool.wait_available()
-                    job = _compat.next(generator)
+                    job = next(generator)
                     if job:
                         # For whatever reason, doing imports within a greenlet
                         # (there's one implicitly invoked in job.process), was
