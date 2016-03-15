@@ -1,5 +1,7 @@
 '''Some utilities for profiling'''
 
+from __future__ import print_function
+
 import redis
 from collections import defaultdict
 
