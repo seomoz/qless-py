@@ -1,14 +1,13 @@
-all:
-	echo Nothing to do
+all: test
 
 .PHONY: clean
 clean:
 	# Remove the build
-	sudo rm -rf build dist
+	rm -rf build dist
 	# And all of our pyc files
-	find . -name '*.pyc' | xargs -n 100 rm
+	find . -name '*.pyc' -delete
 	# And lastly, .coverage files
-	find . -name .coverage | xargs rm
+	find . -name .coverage -delete
 
 .PHONY: qless-core
 qless-core:
@@ -21,7 +20,7 @@ nose: qless-core
 	nosetests --exe --cover-package=qless --with-coverage --cover-branches -v
 
 .PHONY: nose3
-nose3: qless
+nose3: qless-core
 	rm -rf .coverage
 	nosetests3 --exe --cover-package=qless --with-coverage --cover-branches -v
 
