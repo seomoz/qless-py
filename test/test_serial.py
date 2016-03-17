@@ -5,6 +5,7 @@ from common import TestQless
 
 import time
 from threading import Thread
+from six import next
 
 # The stuff we're actually testing
 from qless import logger
@@ -28,10 +29,8 @@ class Worker(SerialWorker):
     def jobs(self):
         '''Yield only a few jobs'''
         generator = SerialWorker.jobs(self)
-        for i, job in enumerate(generator):
-            if i >= 5:
-                break
-            yield job
+        for _ in range(5):
+            yield next(generator)
 
     def kill(self, jid):
         '''We'll push a message to redis instead of falling on our sword'''
@@ -72,9 +71,7 @@ class TestWorker(TestQless):
     def test_jobs(self):
         '''The jobs method yields None if there are no jobs'''
         worker = NoListenWorker(['foo'], self.client, interval=0.2)
-        for job in worker.jobs():
-            self.assertEqual(job, None)
-            break
+        self.assertEqual(next(worker.jobs()), None)
 
     def test_sleeps(self):
         '''Make sure the client sleeps if there aren't jobs to be had'''

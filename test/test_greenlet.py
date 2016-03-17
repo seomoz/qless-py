@@ -5,6 +5,7 @@ from common import TestQless
 
 import time
 import gevent
+from six import next
 
 # The stuff we're actually testing
 from qless.workers.greenlet import GeventWorker
@@ -29,10 +30,8 @@ class PatchedGeventWorker(GeventWorker):
     def jobs(self):
         '''Yield only a few jobs'''
         generator = GeventWorker.jobs(self)
-        for i, job in enumerate(generator):
-            if i >= 5:
-                break
-            yield job
+        for _ in range(5):
+            yield next(generator)
 
     def listen(self, _):
         '''Don't actually listen for pubsub events'''
