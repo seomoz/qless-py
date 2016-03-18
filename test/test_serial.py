@@ -5,6 +5,7 @@ from common import TestQless
 
 import time
 from threading import Thread
+from six import next
 
 # The stuff we're actually testing
 from qless import logger
@@ -28,8 +29,8 @@ class Worker(SerialWorker):
     def jobs(self):
         '''Yield only a few jobs'''
         generator = SerialWorker.jobs(self)
-        for _ in xrange(5):
-            yield generator.next()
+        for _ in range(5):
+            yield next(generator)
 
     def kill(self, jid):
         '''We'll push a message to redis instead of falling on our sword'''
@@ -62,7 +63,7 @@ class TestWorker(TestQless):
 
     def test_basic(self):
         '''Can complete jobs in a basic way'''
-        jids = [self.queue.put(SerialJob, {}) for _ in xrange(5)]
+        jids = [self.queue.put(SerialJob, {}) for _ in range(5)]
         NoListenWorker(['foo'], self.client, interval=0.2).run()
         states = [self.client.jobs[jid].state for jid in jids]
         self.assertEqual(states, ['complete'] * 5)
@@ -70,11 +71,11 @@ class TestWorker(TestQless):
     def test_jobs(self):
         '''The jobs method yields None if there are no jobs'''
         worker = NoListenWorker(['foo'], self.client, interval=0.2)
-        self.assertEqual(worker.jobs().next(), None)
+        self.assertEqual(next(worker.jobs()), None)
 
     def test_sleeps(self):
         '''Make sure the client sleeps if there aren't jobs to be had'''
-        for _ in xrange(4):
+        for _ in range(4):
             self.queue.put(SerialJob, {})
         before = time.time()
         NoListenWorker(['foo'], self.client, interval=0.2).run()
@@ -82,7 +83,7 @@ class TestWorker(TestQless):
 
     def test_lost_locks(self):
         '''The worker should be able to stop processing if need be'''
-        jid = [self.queue.put(SerialJob, {'sleep': 0.1}) for _ in xrange(5)][0]
+        jid = [self.queue.put(SerialJob, {'sleep': 0.1}) for _ in range(5)][0]
         self.thread = Thread(
             target=Worker(['foo'], self.client, interval=0.2).run)
         self.thread.start()

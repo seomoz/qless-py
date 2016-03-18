@@ -4,10 +4,17 @@ import os
 import psutil
 import signal
 
+from six import string_types
+
 # Internal imports
 from . import Worker
 from qless import logger, util
 from .serial import SerialWorker
+
+try:
+    NUM_CPUS = psutil.cpu_count()
+except AttributeError:
+    NUM_CPUS = psutil.NUM_CPUS
 
 
 class ForkingWorker(Worker):
@@ -17,7 +24,7 @@ class ForkingWorker(Worker):
         # Worker class to use
         self.klass = self.kwargs.pop('klass', SerialWorker)
         # How many children to launch
-        self.count = self.kwargs.pop('workers', 0) or psutil.NUM_CPUS
+        self.count = self.kwargs.pop('workers', 0) or NUM_CPUS
         # A dictionary of child pids to information about them
         self.sandboxes = {}
         # Whether or not we're supposed to shutdown
@@ -25,7 +32,7 @@ class ForkingWorker(Worker):
 
     def stop(self, sig=signal.SIGINT):
         '''Stop all the workers, and then wait for them'''
-        for cpid in self.sandboxes.keys():
+        for cpid in self.sandboxes:
             logger.warn('Stopping %i...' % cpid)
             try:
                 os.kill(cpid, sig)
@@ -33,7 +40,8 @@ class ForkingWorker(Worker):
                 logger.exception('Error stopping %s...' % cpid)
 
         # While we still have children running, wait for them
-        for cpid in self.sandboxes.keys():
+        # We edit the dictionary during the loop, so we need to copy its keys
+        for cpid in list(self.sandboxes):
             try:
                 logger.info('Waiting for %i...' % cpid)
                 pid, status = os.waitpid(cpid, 0)
@@ -50,7 +58,7 @@ class ForkingWorker(Worker):
         # Apparently there's an issue with importing gevent in the parent
         # process and then using it int he child. This is meant to relieve that
         # problem by allowing `klass` to be specified as a string.
-        if isinstance(self.klass, basestring):
+        if isinstance(self.klass, string_types):
             self.klass = util.import_class(self.klass)
         return self.klass(self.queues, self.client, **copy)
 
@@ -96,7 +104,7 @@ class ForkingWorker(Worker):
     def handler(self, signum, frame):  # pragma: no cover
         '''Signal handler for this process'''
         if signum in (signal.SIGTERM, signal.SIGINT, signal.SIGQUIT):
-            for cpid in self.sandboxes.keys():
+            for cpid in self.sandboxes:
                 try:
                     os.kill(cpid, signum)
                 except OSError:  # pragma: no cover

@@ -1,5 +1,7 @@
 #! /usr/bin/env python
 
+from __future__ import print_function
+
 import argparse
 
 # First off, read the arguments
@@ -76,7 +78,7 @@ class ForgetfulWorker(threading.Thread):
 
 # Make sure that the redis instance is empty first
 if len(client.redis.keys('*')):
-    print 'Must begin on an empty Redis instance'
+    print('Must begin on an empty Redis instance')
     exit(1)
 
 client.config.set('heartbeat', 1)
@@ -105,33 +107,33 @@ def histo(l):
     count = sum(l)
     l = list(o for o in l if o)
     for i in range(len(l)):
-        print '\t\t%2i, %10.9f, %i' % (i, float(l[i]) / count, l[i])
+        print('\t\t%2i, %10.9f, %i' % (i, float(l[i]) / count, l[i]))
 
 # Now we'll print out some interesting stats
 stats = client.queue('testing').stats()
-print 'Wait:'
-print '\tCount: %i'  % stats['wait']['count']
-print '\tMean : %fs' % stats['wait']['mean']
-print '\tSDev : %f'  % stats['wait']['std']
-print '\tWait Time Histogram:'
+print('Wait:')
+print('\tCount: %i'  % stats['wait']['count'])
+print('\tMean : %fs' % stats['wait']['mean'])
+print('\tSDev : %f'  % stats['wait']['std'])
+print('\tWait Time Histogram:')
 histo(stats['wait']['histogram'])
 
-print 'Run:'
-print '\tCount: %i'  % stats['run']['count']
-print '\tMean : %fs' % stats['run']['mean']
-print '\tSDev : %f'  % stats['run']['std']
-print '\tCompletion Time Histogram:'
+print('Run:')
+print('\tCount: %i'  % stats['run']['count'])
+print('\tMean : %fs' % stats['run']['mean'])
+print('\tSDev : %f'  % stats['run']['std'])
+print('\tCompletion Time Histogram:')
 histo(stats['run']['histogram'])
 
-print '=' * 50
-print 'Put jobs : %fs' % putTime
-print 'Do jobs  : %fs' % workTime
+print('=' * 50)
+print('Put jobs : %fs' % putTime)
+print('Do jobs  : %fs' % workTime)
 info = client.redis.info()
-print 'Redis Mem: %s'  % info['used_memory_human']
-print 'Redis Lua: %s'  % info['used_memory_lua']
-print 'Redis CPU: %fs' % (info['used_cpu_user'] + info['used_cpu_sys'] - cpuBefore)
+print('Redis Mem: %s'  % info['used_memory_human'])
+print('Redis Lua: %s'  % info['used_memory_lua'])
+print('Redis CPU: %fs' % (info['used_cpu_user'] + info['used_cpu_sys'] - cpuBefore))
 
 # Flush the database when we're done
 if args.flush:
-    print 'Flushing'
+    print('Flushing')
     client.redis.flushdb()

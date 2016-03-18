@@ -7,6 +7,7 @@ import time
 import types
 import traceback
 import simplejson as json
+from six.moves import reload_module
 
 # Internal imports
 from qless import logger
@@ -71,7 +72,7 @@ class BaseJob(object):
         if hasattr(mod, '__file__'):
             mtime = os.stat(mod.__file__).st_mtime
             if BaseJob._loaded[klass] < mtime:
-                mod = reload(mod)
+                mod = reload_module(mod)
 
         return getattr(mod, klass.rpartition('.')[2])
 
@@ -201,7 +202,6 @@ class Job(BaseJob):
             self.expires_at = float(self.client('heartbeat', self.jid,
             self.client.worker_name, json.dumps(self.data)) or 0)
         except QlessException:
-            print 'Raising exception'
             raise LostLockException(self.jid)
         logger.debug('Heartbeated %s (ttl = %s)', self.jid, self.ttl)
         return self.expires_at

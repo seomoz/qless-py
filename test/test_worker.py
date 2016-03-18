@@ -9,6 +9,7 @@ from qless.workers import Worker
 # External dependencies
 import os
 import itertools
+from six import next
 
 
 class TestWorker(TestQless):
@@ -83,11 +84,11 @@ class TestWorker(TestQless):
         '''We should be able to resume jobs'''
         queue = self.worker.client.queues['foo']
         queue.put('foo', {})
-        job = self.worker.jobs().next()
+        job = next(self.worker.jobs())
         self.assertTrue(isinstance(job, qless.Job))
         # Now, we'll create a new worker and make sure it gets that job first
         worker = Worker(['foo'], self.client, resume=[job])
-        self.assertEqual(worker.jobs().next().jid, job.jid)
+        self.assertEqual(next(worker.jobs()).jid, job.jid)
 
     def test_unresumable(self):
         '''If we can't heartbeat jobs, we should not try to resume it'''
@@ -100,7 +101,7 @@ class TestWorker(TestQless):
         # Now, we'll create a new worker and make sure it gets that job first
         worker = Worker(
             ['foo'], self.client, resume=[self.client.jobs[job.jid]])
-        self.assertEqual(worker.jobs().next(), None)
+        self.assertEqual(next(worker.jobs()), None)
 
     def test_resumable(self):
         '''We should be able to find all the jobs that can be resumed'''
@@ -120,6 +121,6 @@ class TestWorker(TestQless):
         '''We should be able to divide resumable jobs evenly'''
         items = self.worker.divide(range(100), 7)
         # Make sure we have the same items as output as input
-        self.assertEqual(sorted(itertools.chain(*items)), range(100))
+        self.assertEqual(sorted(itertools.chain(*items)), list(range(100)))
         lengths = [len(batch) for batch in items]
         self.assertLessEqual(max(lengths) - min(lengths), 1)

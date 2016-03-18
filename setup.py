@@ -4,7 +4,7 @@ from distutils.core import setup
 
 setup(
     name                 = 'qless-py',
-    version              = '0.10.2',
+    version              = '0.11.0-dev',
     description          = 'Redis-based Queue Management',
     long_description     = '''
 Redis-based queue management, with heartbeating, job tracking,
@@ -25,10 +25,16 @@ stats, notifications, and a whole lot more.''',
         'ps': ['setproctitle']
     },
     install_requires     = [
-        'argparse', 'decorator', 'hiredis', 'redis', 'psutil', 'simplejson'],
+        'argparse', 'decorator', 'hiredis', 'redis', 'psutil', 'six',
+        'simplejson'],
     classifiers          = [
         'License :: OSI Approved :: MIT License',
-        'Programming Language :: Python',
+        'Programming Language :: Python :: 2',
+        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.3',
+        'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.5',
         'Intended Audience :: Developers',
         'Operating System :: OS Independent'
     ]

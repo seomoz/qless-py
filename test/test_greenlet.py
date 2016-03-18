@@ -5,6 +5,7 @@ from common import TestQless
 
 import time
 import gevent
+from six import next
 
 # The stuff we're actually testing
 from qless.workers.greenlet import GeventWorker
@@ -29,8 +30,8 @@ class PatchedGeventWorker(GeventWorker):
     def jobs(self):
         '''Yield only a few jobs'''
         generator = GeventWorker.jobs(self)
-        for _ in xrange(5):
-            yield generator.next()
+        for _ in range(5):
+            yield next(generator)
 
     def listen(self, _):
         '''Don't actually listen for pubsub events'''
@@ -53,7 +54,7 @@ class TestWorker(TestQless):
 
     def test_basic(self):
         '''Can complete jobs in a basic way'''
-        jids = [self.queue.put(GeventJob, {}) for _ in xrange(5)]
+        jids = [self.queue.put(GeventJob, {}) for _ in range(5)]
         self.worker.run()
         states = [self.client.jobs[jid].state for jid in jids]
         self.assertEqual(states, ['complete'] * 5)
@@ -63,7 +64,7 @@ class TestWorker(TestQless):
 
     def test_sleeps(self):
         '''Make sure the client sleeps if there aren't jobs to be had'''
-        for _ in xrange(4):
+        for _ in range(4):
             self.queue.put(GeventJob, {})
         before = time.time()
         self.worker.run()
