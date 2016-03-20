@@ -11,7 +11,7 @@ Redis-based queue management, with heartbeating, job tracking,
 stats, notifications, and a whole lot more.''',
     url                  = 'http://github.com/seomoz/qless-py',
     author               = 'Dan Lecocq',
-    author_email         = 'dan@seomoz.org',
+    author_email         = 'dan@moz.com',
     license              = "MIT License",
     keywords             = 'redis, qless, job',
     packages             = [
