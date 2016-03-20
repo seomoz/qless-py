@@ -14,19 +14,37 @@ stats, notifications, and a whole lot more.''',
     author_email         = 'dan@seomoz.org',
     license              = "MIT License",
     keywords             = 'redis, qless, job',
-    packages             = ['qless', 'qless.workers'],
+    packages             = [
+        'qless',
+        'qless.workers'
+    ],
     package_dir          = {
         'qless': 'qless',
-        'qless.workers': 'qless/workers'},
-    package_data         = {'qless': ['qless-core/*.lua']},
+        'qless.workers': 'qless/workers'
+    },
+    package_data         = {
+        'qless': [
+            'qless-core/*.lua'
+        ]
+    },
     include_package_data = True,
-    scripts              = ['bin/qless-py-worker'],
+    scripts              = [
+        'bin/qless-py-worker'
+    ],
     extras_require       = {
-        'ps': ['setproctitle']
+        'ps': [
+            'setproctitle'
+        ]
     },
     install_requires     = [
-        'argparse', 'decorator', 'hiredis', 'redis', 'psutil', 'six',
-        'simplejson'],
+        'argparse',
+        'decorator',
+        'hiredis',
+        'redis',
+        'psutil',
+        'six',
+        'simplejson'
+    ],
     classifiers          = [
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python :: 2',
