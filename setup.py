@@ -45,6 +45,12 @@ stats, notifications, and a whole lot more.''',
         'six',
         'simplejson'
     ],
+    tests_requires       = [
+        'coverage',
+        'mock',
+        'nose',
+        'setuptools>=17.1'
+    ],
     classifiers          = [
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python :: 2',
