@@ -4,39 +4,34 @@ set -e
 
 # Some dependencies
 sudo apt-get update
-sudo apt-get install -y libhiredis-dev libevent-dev python-pip python-dev
+sudo apt-get install -y git libhiredis-dev libevent-dev python-pip python-dev
 
-# Some configuration files
-(
-    cd /vagrant/provision
-    sudo cp etc/redis.conf /etc/redis.conf
-    sudo cp etc/init/redis.conf /etc/init/redis.conf
-    sudo cp etc/sysctl.d/99-overcommit.conf /etc/sysctl.d/99-overcommit.conf
-)
+# Install redis in support of qless
+sudo apt-get install -y redis-server
 
-# Install redis
-(
-    # Make a redis user and space for redis
-    sudo useradd -U -s /bin/false -d /dev/null redis
-    sudo mkdir -p /var/redis
-    sudo chown redis:redis /var/redis
+# Libraries required to build a complete python with pyenv:
+# https://github.com/yyuu/pyenv/wiki
+sudo apt-get install -y make build-essential libssl-dev zlib1g-dev libbz2-dev \
+    libreadline-dev libsqlite3-dev wget curl llvm libncurses5-dev
 
-    # Download and install the thing
-    cd /tmp
-    wget http://download.redis.io/releases/redis-2.8.19.tar.gz
-    tar xf redis-2.8.19.tar.gz
-    (
-        cd redis-2.8.19
-        make
-        sudo make install
-        sudo service redis start
-    )
-    sudo rm -r redis-2.8.19{,.tar.gz}
-)
+# Install pyenv
+git clone https://github.com/yyuu/pyenv.git ~/.pyenv
+echo '
+# Pyenv
+export PYENV_ROOT="$HOME/.pyenv"
+export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init -)"
+' >> ~/.bash_profile
+source ~/.bash_profile
+hash
 
 # Install dependencies and the thing itself
-(
-    cd /vagrant/
-    sudo pip install -r requirements.txt
-    sudo python setup.py install
-)
+pushd /vagrant
+
+    # Install our python version
+    pyenv install
+    pyenv rehash
+
+    # Install our requirements
+    pip install -r requirements.txt
+popd
