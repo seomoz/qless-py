@@ -2,6 +2,7 @@
 
 import sys
 from six import PY3
+import mock
 
 from common import TestQless
 from qless.job import Job, BaseJob
@@ -202,6 +203,13 @@ class TestJob(TestQless):
         self.assertEqual(self.client.jobs['jid'].klass, Foo)
         Job.reload(self.client.jobs['jid'].klass_name)
         self.assertEqual(self.client.jobs['jid'].klass, Foo)
+
+    def test_no_mtime(self):
+        '''Don't blow up we cannot check the modification time of a module.'''
+        exc = OSError('Could not stat file')
+        with mock.patch('qless.job.os.stat', side_effect=exc):
+            Job._import('test_job.Foo')
+            Job._import('test_job.Foo')
 
 
 class TestRecurring(TestQless):

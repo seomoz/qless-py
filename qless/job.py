@@ -70,9 +70,13 @@ class BaseJob(object):
         if klass not in BaseJob._loaded:
             BaseJob._loaded[klass] = time.time()
         if hasattr(mod, '__file__'):
-            mtime = os.stat(mod.__file__).st_mtime
-            if BaseJob._loaded[klass] < mtime:
-                mod = reload_module(mod)
+            try:
+                mtime = os.stat(mod.__file__).st_mtime
+                if BaseJob._loaded[klass] < mtime:
+                    mod = reload_module(mod)
+            except OSError:
+                logger.warn('Could not check modification time of %s',
+                    mod.__file__)
 
         return getattr(mod, klass.rpartition('.')[2])
 
