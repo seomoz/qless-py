@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-import psutil
+import multiprocessing as mp
 import argparse
 
 # First off, read the arguments
@@ -26,8 +26,7 @@ parser.add_argument('-d', '--workdir', default='.',
     help='The base work directory path')
 
 # Options specific to the worker we're instantiating
-num_cpus = psutil.NUM_CPUS if hasattr(psutil, 'NUM_CPUS') else psutil.cpu_count()
-parser.add_argument('-w', '--workers', default=num_cpus, type=int,
+parser.add_argument('-w', '--workers', default=mp.cpu_count(), type=int,
     help='How many processes to run. Set to 0 to use all available cores')
 parser.add_argument('-q', '--queue', action='append', default=[],
     help='The queues to pull work from')
