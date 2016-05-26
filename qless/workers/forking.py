@@ -1,7 +1,7 @@
 '''A worker that forks child processes'''
 
 import os
-import psutil
+import multiprocessing
 import signal
 
 from six import string_types
@@ -12,9 +12,9 @@ from qless import logger, util
 from .serial import SerialWorker
 
 try:
-    NUM_CPUS = psutil.cpu_count()
-except AttributeError:
-    NUM_CPUS = psutil.NUM_CPUS
+    NUM_CPUS = multiprocessing.cpu_count()
+except NotImplementedError:
+    NUM_CPUS = 1
 
 
 class ForkingWorker(Worker):
