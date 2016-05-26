@@ -4,7 +4,8 @@ import psutil
 import argparse
 
 # First off, read the arguments
-parser = argparse.ArgumentParser(description='Run qless workers.')
+parser = argparse.ArgumentParser(description='Run qless workers.',
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
 # Options specific to the client we're making'
 parser.add_argument('--host', dest='host', default='redis://localhost:6379',
