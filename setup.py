@@ -41,7 +41,6 @@ stats, notifications, and a whole lot more.''',
         'decorator',
         'hiredis',
         'redis',
-        'psutil',
         'six',
         'simplejson'
     ],
