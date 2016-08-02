@@ -32,6 +32,14 @@ pushd /vagrant
     pyenv install
     pyenv rehash
 
-    # Install our requirements
+    # Install a virtualenv
+    pip install virtualenv
+    if [ ! -d venv ]; then
+        virtualenv venv
+    fi
+    source venv/bin/activate
+
+    # Lastly, our dependencies
     pip install -r requirements.txt
+
 popd

@@ -16,16 +16,10 @@ qless-core:
 
 .PHONY: nose
 nose: qless-core
-	rm -rf .coverage
-	nosetests --exe --cover-package=qless --with-coverage --cover-branches -v
-
-.PHONY: nose3
-nose3: qless-core
-	rm -rf .coverage
-	nosetests3 --exe --cover-package=qless --with-coverage --cover-branches -v
+	nosetests --with-coverage
 
 requirements:
 	pip freeze | grep -v -e qless-py > requirements.txt
 
 .PHONY: test
-test: nose nose3
+test: nose
