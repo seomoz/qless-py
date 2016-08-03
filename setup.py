@@ -48,6 +48,7 @@ stats, notifications, and a whole lot more.''',
         'coverage',
         'mock',
         'nose',
+        'rednose',
         'setuptools>=17.1'
     ],
     classifiers          = [
