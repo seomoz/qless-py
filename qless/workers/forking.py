@@ -80,8 +80,10 @@ class ForkingWorker(Worker):
                 # Move to the sandbox as the current working directory
                 with Worker.sandbox(sandbox):
                     os.chdir(sandbox)
-                    self.spawn(resume=resume[index], sandbox=sandbox).run()
-                    exit(0)
+                    try:
+                        self.spawn(resume=resume[index], sandbox=sandbox).run()
+                    finally:
+                        os._exit(0)
 
         try:
             while not self.shutdown:
@@ -96,8 +98,10 @@ class ForkingWorker(Worker):
                 else:  # pragma: no cover
                     with Worker.sandbox(sandbox):
                         os.chdir(sandbox)
-                        self.spawn(sandbox=sandbox).run()
-                        exit(0)
+                        try:
+                           self.spawn(sandbox=sandbox).run()
+                        finally:
+                            os._exit(0)
         finally:
             self.stop(signal.SIGKILL)
 
@@ -110,4 +114,4 @@ class ForkingWorker(Worker):
                 except OSError:  # pragma: no cover
                     logger.exception(
                         'Failed to send %s to %s...' % (signum, cpid))
-            exit(0)
+            os._exit(0)
