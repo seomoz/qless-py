@@ -44,19 +44,10 @@ class GeventWorker(Worker):
             logger.warn('Lost ownership of %s' % jid)
             greenlet.kill()
 
-    @classmethod
-    def patch(cls):  # pragma: no cover
-        '''Monkey-patch anything that needs to be patched'''
-        from gevent import monkey
-        monkey.patch_all()
-
     def run(self):
         '''Work on jobs'''
         # Register signal handlers
         self.signals()
-
-        # And monkey-patch before doing any imports
-        self.patch()
 
         # Start listening
         with self.listener():

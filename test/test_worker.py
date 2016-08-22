@@ -20,9 +20,13 @@ class TestWorker(TestQless):
 
     def test_proctitle(self):
         '''Make sure we can get / set the process title'''
-        before = Worker.title()
-        Worker.title('Foo')
-        self.assertNotEqual(before, Worker.title())
+        try:
+            import setproctitle
+            before = Worker.title()
+            Worker.title('Foo')
+            self.assertNotEqual(before, Worker.title())
+        except ImportError:
+            self.skipTest('setproctitle not available')
 
     def test_kill(self):
         '''The base worker class' kill method should raise an exception'''
