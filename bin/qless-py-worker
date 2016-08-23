@@ -40,6 +40,22 @@ parser.add_argument('-r', '--resume', default=False, action='store_true',
     help='Try to resume jobs that this worker had previously been working on')
 args = parser.parse_args()
 
+# Build up the kwargs that we'll pass to the worker
+kwargs = {
+    'workers': args.workers,
+    'interval': args.interval,
+    'resume': args.resume
+}
+
+# If we're supposed to use greenlets...
+if args.greenlets:
+    from gevent import monkey
+    monkey.patch_all()
+    kwargs.update({
+        'klass': 'qless.workers.greenlet.GeventWorker',
+        'greenlets': args.greenlets
+    })
+
 import os
 import sys
 import qless
@@ -72,20 +88,6 @@ for module in getattr(args, 'import'):
 
 # Change path to our working directory
 os.chdir(args.workdir)
-
-# Build up the kwargs that we'll pass to the worker
-kwargs = {
-    'workers': args.workers,
-    'interval': args.interval,
-    'resume': args.resume
-}
-
-# If we're supposed to use greenlets...
-if args.greenlets:
-    kwargs.update({
-        'klass': 'qless.workers.greenlet.GeventWorker',
-        'greenlets': args.greenlets
-    })
 
 # And now run the worker
 ForkingWorker(
