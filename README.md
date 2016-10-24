@@ -196,6 +196,9 @@ _add_ jobs in an interactive prompt, but just can't define new job types.
 
 Running
 =======
+__You should not run `qless-py-worker` as a privileged user__ -- instead, create
+a service account with the appropriate permissions on the system.
+
 All that remains is to have workers actually run these jobs. This distribution
 comes with a script to help with this:
 
