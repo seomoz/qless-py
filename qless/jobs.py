@@ -30,12 +30,13 @@ class SubprocessJob(object):
                 cwd=job.sandbox)
             logger.info('Opened subprocess (%i): %s', proc.pid, argstring)
             try:
-                if proc.wait() != 0:
+                stdout, stderr = proc.communicate()
+                if proc.poll() != 0:
                     group = 'subprocess-failed'
                     message = '\n\n'.join([
                         'Exit code: %i' % proc.returncode,
-                        'Stderr (last 1k): %s' % proc.stderr.read()[-1000:],
-                        'Stdout (last 1k): %s' % proc.stdout.read()[-1000:]
+                        'Stderr (last 1k): %s' % stderr[-1000:],
+                        'Stdout (last 1k): %s' % stdout[-1000:]
                     ])
                     job.fail(group, message)
                 else:
