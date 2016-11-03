@@ -82,6 +82,8 @@ class ForkingWorker(Worker):
                     os.chdir(sandbox)
                     try:
                         self.spawn(resume=resume[index], sandbox=sandbox).run()
+                    except:
+                        logger.exception('Exception in spawned worker')
                     finally:
                         os._exit(0)
 
@@ -100,6 +102,8 @@ class ForkingWorker(Worker):
                         os.chdir(sandbox)
                         try:
                            self.spawn(sandbox=sandbox).run()
+                        except:
+                            logger.exception('Exception in spawned worker')
                         finally:
                             os._exit(0)
         finally:
