@@ -240,11 +240,14 @@ class Job(BaseJob):
         '''Stop tracking this job'''
         return self.client('track', 'untrack', self.jid)
 
-    def retry(self, delay=0):
+    def retry(self, delay=0, group=None, message=None):
         '''Retry this job in a little bit, in the same queue. This is meant
         for the times when you detect a transient failure yourself'''
-        return self.client('retry', self.jid, self.queue_name,
-            self.worker_name, delay)
+        args = ['retry', self.jid, self.queue_name, self.worker_name, delay]
+        if group is not None and message is not None:
+            args.append(group)
+            args.append(message)
+        return self.client(*args)
 
     def depend(self, *args):
         '''If and only if a job already has other dependencies, this will add
