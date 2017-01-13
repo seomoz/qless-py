@@ -165,6 +165,13 @@ class TestJob(TestQless):
         self.client.queues['foo'].put('Foo', {}, jid='jid')
         self.assertRaises(QlessException, self.client.jobs['jid'].retry)
 
+    def test_retry_group_and_message(self):
+        '''Can supply a group and message when retrying.'''
+        self.client.queues['foo'].put('Foo', {}, jid='jid', retries=0)
+        self.client.queues['foo'].pop().retry(group='group', message='message')
+        self.assertEqual(self.client.jobs['jid'].failure['group'], 'group')
+        self.assertEqual(self.client.jobs['jid'].failure['message'], 'message')
+
     def test_repr(self):
         '''Has a reasonable repr'''
         self.client.queues['foo'].put(Job, {}, jid='jid')
