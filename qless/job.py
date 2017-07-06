@@ -83,7 +83,7 @@ class BaseJob(object):
     def cancel(self):
         '''Cancel a job. It will be deleted from the system, the thinking
         being that if you don't want to do any work on it, it shouldn't be in
-        the queueing system.'''
+        the queuing system.'''
         return self.client('cancel', self.jid)
 
     def tag(self, *tags):
@@ -106,7 +106,7 @@ class Job(BaseJob):
 
         # The reason we're using object.__setattr__ directly is because
         # we have __setattr__ defined for this class, and we're actually
-        # just interested in setting these memebers directly
+        # just interested in setting these members directly
         object.__setattr__(self, 'expires_at', kwargs['expires'])
         object.__setattr__(self, 'original_retries', kwargs['retries'])
         object.__setattr__(self, 'retries_left', kwargs['remaining'])
