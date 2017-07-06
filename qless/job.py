@@ -178,7 +178,8 @@ class Job(BaseJob):
         delay, and dependencies'''
         logger.info('Moving %s to %s from %s',
             self.jid, queue, self.queue_name)
-        return self.client('put', queue, self.jid, self.klass_name,
+        return self.client('put', self.worker_name,
+            queue, self.jid, self.klass_name,
             json.dumps(self.data), delay, 'depends', json.dumps(depends or [])
         )
 
