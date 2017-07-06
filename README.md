@@ -653,7 +653,7 @@ git checkout v0.10.0
 # Checkout, update and build the submodule
 git submodule init
 git submodule update
-make -C qless/qless-code
+make -C qless/qless-core
 
 # Install dependencies and then qless
 sudo pip install -r requirements.txt
