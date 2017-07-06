@@ -32,8 +32,8 @@ class BaseJob(object):
 
     def __setattr__(self, key, value):
         if key == 'priority':
-            return self.client('priority', self.jid, value
-                ) and object.__setattr__(self, key, value)
+            return self.client('priority', self.jid,
+                value) and object.__setattr__(self, key, value)
         else:
             return object.__setattr__(self, key, value)
 
@@ -101,8 +101,8 @@ class Job(BaseJob):
         BaseJob.__init__(self, client, **kwargs)
         self.client = client
         for att in ['state', 'tracked', 'failure',
-            'history', 'dependents', 'dependencies']:
-            object.__setattr__(self, att, kwargs[att])
+                'history', 'dependents', 'dependencies']:
+                object.__setattr__(self, att, kwargs[att])
 
         # The reason we're using object.__setattr__ directly is because
         # we have __setattr__ defined for this class, and we're actually
@@ -166,8 +166,9 @@ class Job(BaseJob):
                     repr(method) + ' is not static')
         else:
             # Or fail with a message to that effect
-            logger.error('Failed %s : %s is missing a method "%s" or "process"',
-                         self.jid, self.klass_name, self.queue_name)
+            logger.error(
+                'Failed %s : %s is missing a method "%s" or "process"',
+                self.jid, self.klass_name, self.queue_name)
             self.fail(self.queue_name + '-method-missing', self.klass_name +
                 ' is missing a method "' + self.queue_name + '" or "process"')
 
@@ -192,8 +193,8 @@ class Job(BaseJob):
                 self.jid, nextq, self.queue_name)
             return self.client('complete', self.jid, self.client.worker_name,
                 self.queue_name, json.dumps(self.data), 'next', nextq,
-                'delay', delay or 0, 'depends', json.dumps(depends or [])
-            ) or False
+                'delay', delay or 0, 'depends',
+                json.dumps(depends or [])) or False
         else:
             logger.info('Completing %s', self.jid)
             return self.client('complete', self.jid, self.client.worker_name,
@@ -275,8 +276,8 @@ class RecurringJob(BaseJob):
     def __init__(self, client, **kwargs):
         BaseJob.__init__(self, client, **kwargs)
         for att in ['jid', 'priority', 'tags',
-            'retries', 'interval', 'count']:
-            object.__setattr__(self, att, kwargs[att])
+                'retries', 'interval', 'count']:
+                object.__setattr__(self, att, kwargs[att])
         object.__setattr__(self, 'client', client)
         object.__setattr__(self, 'klass_name', kwargs['klass'])
         object.__setattr__(self, 'queue_name', kwargs['queue'])
@@ -285,16 +286,16 @@ class RecurringJob(BaseJob):
 
     def __setattr__(self, key, value):
         if key in ('priority', 'retries', 'interval'):
-            return self.client('recur.update', self.jid, key, value
-                ) and object.__setattr__(self, key, value)
+            return self.client('recur.update', self.jid, key,
+                value) and object.__setattr__(self, key, value)
         if key == 'data':
-            return self.client('recur.update', self.jid, key, json.dumps(value)
-                ) and object.__setattr__(self, 'data', value)
+            return self.client('recur.update', self.jid, key,
+                json.dumps(value)) and object.__setattr__(self, 'data', value)
         if key == 'klass':
             name = value.__module__ + '.' + value.__name__
-            return self.client('recur.update', self.jid, 'klass', name
-                ) and object.__setattr__(self, 'klass_name', name
-                ) and object.__setattr__(self, 'klass', value)
+            return self.client('recur.update', self.jid, 'klass',
+                name) and object.__setattr__(self, 'klass_name',
+            name) and object.__setattr__(self, 'klass', value)
         return object.__setattr__(self, key, value)
 
     def __getattr__(self, key):
