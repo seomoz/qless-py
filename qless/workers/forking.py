@@ -101,7 +101,7 @@ class ForkingWorker(Worker):
                     with Worker.sandbox(sandbox):
                         os.chdir(sandbox)
                         try:
-                           self.spawn(sandbox=sandbox).run()
+                            self.spawn(sandbox=sandbox).run()
                         except:
                             logger.exception('Exception in spawned worker')
                         finally:
