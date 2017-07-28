@@ -32,8 +32,8 @@ class BaseJob(object):
 
     def __setattr__(self, key, value):
         if key == 'priority':
-            return self.client('priority', self.jid, value
-                ) and object.__setattr__(self, key, value)
+            return self.client('priority', self.jid,
+                value) and object.__setattr__(self, key, value)
         else:
             return object.__setattr__(self, key, value)
 
@@ -83,7 +83,7 @@ class BaseJob(object):
     def cancel(self):
         '''Cancel a job. It will be deleted from the system, the thinking
         being that if you don't want to do any work on it, it shouldn't be in
-        the queueing system.'''
+        the queuing system.'''
         return self.client('cancel', self.jid)
 
     def tag(self, *tags):
@@ -101,12 +101,12 @@ class Job(BaseJob):
         BaseJob.__init__(self, client, **kwargs)
         self.client = client
         for att in ['state', 'tracked', 'failure',
-            'history', 'dependents', 'dependencies']:
-            object.__setattr__(self, att, kwargs[att])
+                'history', 'dependents', 'dependencies']:
+                object.__setattr__(self, att, kwargs[att])
 
         # The reason we're using object.__setattr__ directly is because
         # we have __setattr__ defined for this class, and we're actually
-        # just interested in setting these memebers directly
+        # just interested in setting these members directly
         object.__setattr__(self, 'expires_at', kwargs['expires'])
         object.__setattr__(self, 'original_retries', kwargs['retries'])
         object.__setattr__(self, 'retries_left', kwargs['remaining'])
@@ -166,8 +166,9 @@ class Job(BaseJob):
                     repr(method) + ' is not static')
         else:
             # Or fail with a message to that effect
-            logger.error('Failed %s : %s is missing a method "%s" or "process"',
-                         self.jid, self.klass_name, self.queue_name)
+            logger.error(
+                'Failed %s : %s is missing a method "%s" or "process"',
+                self.jid, self.klass_name, self.queue_name)
             self.fail(self.queue_name + '-method-missing', self.klass_name +
                 ' is missing a method "' + self.queue_name + '" or "process"')
 
@@ -178,7 +179,8 @@ class Job(BaseJob):
         delay, and dependencies'''
         logger.info('Moving %s to %s from %s',
             self.jid, queue, self.queue_name)
-        return self.client('put', queue, self.jid, self.klass_name,
+        return self.client('put', self.worker_name,
+            queue, self.jid, self.klass_name,
             json.dumps(self.data), delay, 'depends', json.dumps(depends or [])
         )
 
@@ -191,8 +193,8 @@ class Job(BaseJob):
                 self.jid, nextq, self.queue_name)
             return self.client('complete', self.jid, self.client.worker_name,
                 self.queue_name, json.dumps(self.data), 'next', nextq,
-                'delay', delay or 0, 'depends', json.dumps(depends or [])
-            ) or False
+                'delay', delay or 0, 'depends',
+                json.dumps(depends or [])) or False
         else:
             logger.info('Completing %s', self.jid)
             return self.client('complete', self.jid, self.client.worker_name,
@@ -240,11 +242,14 @@ class Job(BaseJob):
         '''Stop tracking this job'''
         return self.client('track', 'untrack', self.jid)
 
-    def retry(self, delay=0):
+    def retry(self, delay=0, group=None, message=None):
         '''Retry this job in a little bit, in the same queue. This is meant
         for the times when you detect a transient failure yourself'''
-        return self.client('retry', self.jid, self.queue_name,
-            self.worker_name, delay)
+        args = ['retry', self.jid, self.queue_name, self.worker_name, delay]
+        if group is not None and message is not None:
+            args.append(group)
+            args.append(message)
+        return self.client(*args)
 
     def depend(self, *args):
         '''If and only if a job already has other dependencies, this will add
@@ -271,8 +276,8 @@ class RecurringJob(BaseJob):
     def __init__(self, client, **kwargs):
         BaseJob.__init__(self, client, **kwargs)
         for att in ['jid', 'priority', 'tags',
-            'retries', 'interval', 'count']:
-            object.__setattr__(self, att, kwargs[att])
+                'retries', 'interval', 'count']:
+                object.__setattr__(self, att, kwargs[att])
         object.__setattr__(self, 'client', client)
         object.__setattr__(self, 'klass_name', kwargs['klass'])
         object.__setattr__(self, 'queue_name', kwargs['queue'])
@@ -281,16 +286,16 @@ class RecurringJob(BaseJob):
 
     def __setattr__(self, key, value):
         if key in ('priority', 'retries', 'interval'):
-            return self.client('recur.update', self.jid, key, value
-                ) and object.__setattr__(self, key, value)
+            return self.client('recur.update', self.jid, key,
+                value) and object.__setattr__(self, key, value)
         if key == 'data':
-            return self.client('recur.update', self.jid, key, json.dumps(value)
-                ) and object.__setattr__(self, 'data', value)
+            return self.client('recur.update', self.jid, key,
+                json.dumps(value)) and object.__setattr__(self, 'data', value)
         if key == 'klass':
             name = value.__module__ + '.' + value.__name__
-            return self.client('recur.update', self.jid, 'klass', name
-                ) and object.__setattr__(self, 'klass_name', name
-                ) and object.__setattr__(self, 'klass', value)
+            return self.client('recur.update', self.jid, 'klass',
+                name) and object.__setattr__(self, 'klass_name',
+            name) and object.__setattr__(self, 'klass', value)
         return object.__setattr__(self, key, value)
 
     def __getattr__(self, key):

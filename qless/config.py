@@ -20,7 +20,10 @@ class Config(object):
         result = self._client('config.get', option)
         if not result:
             return None
-        return json.loads(result)
+        try:
+            return json.loads(result)
+        except TypeError:
+            return result
 
     def __setitem__(self, option, value):
         return self._client('config.set', option, value)
@@ -42,7 +45,7 @@ class Config(object):
     def get(self, option, default=None):
         '''Get a particular option, or the default if it's missing'''
         val = self[option]
-        return ((val == None) and default) or val
+        return (val is None and default) or val
 
     def items(self):
         '''Just like `dict.items`'''
@@ -56,7 +59,7 @@ class Config(object):
         '''Just like `dict.pop`'''
         val = self[option]
         del self[option]
-        return ((val == None) and default) or val
+        return (val is None and default) or val
 
     def update(self, other=(), **kwargs):
         '''Just like `dict.update`'''

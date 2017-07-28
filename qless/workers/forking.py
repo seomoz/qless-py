@@ -80,8 +80,12 @@ class ForkingWorker(Worker):
                 # Move to the sandbox as the current working directory
                 with Worker.sandbox(sandbox):
                     os.chdir(sandbox)
-                    self.spawn(resume=resume[index], sandbox=sandbox).run()
-                    exit(0)
+                    try:
+                        self.spawn(resume=resume[index], sandbox=sandbox).run()
+                    except:
+                        logger.exception('Exception in spawned worker')
+                    finally:
+                        os._exit(0)
 
         try:
             while not self.shutdown:
@@ -96,18 +100,17 @@ class ForkingWorker(Worker):
                 else:  # pragma: no cover
                     with Worker.sandbox(sandbox):
                         os.chdir(sandbox)
-                        self.spawn(sandbox=sandbox).run()
-                        exit(0)
+                        try:
+                            self.spawn(sandbox=sandbox).run()
+                        except:
+                            logger.exception('Exception in spawned worker')
+                        finally:
+                            os._exit(0)
         finally:
             self.stop(signal.SIGKILL)
 
     def handler(self, signum, frame):  # pragma: no cover
         '''Signal handler for this process'''
         if signum in (signal.SIGTERM, signal.SIGINT, signal.SIGQUIT):
-            for cpid in self.sandboxes:
-                try:
-                    os.kill(cpid, signum)
-                except OSError:  # pragma: no cover
-                    logger.exception(
-                        'Failed to send %s to %s...' % (signum, cpid))
-            exit(0)
+            self.stop(signum)
+            os._exit(0)

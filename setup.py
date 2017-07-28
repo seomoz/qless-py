@@ -4,7 +4,7 @@ from setuptools import setup
 
 setup(
     name                 = 'qless-py',
-    version              = '0.11.1',
+    version              = '0.11.4',
     description          = 'Redis-based Queue Management',
     long_description     = '''
 Redis-based queue management, with heartbeating, job tracking,
@@ -48,6 +48,7 @@ stats, notifications, and a whole lot more.''',
         'coverage',
         'mock',
         'nose',
+        'rednose',
         'setuptools>=17.1'
     ],
     classifiers          = [

@@ -40,23 +40,14 @@ class GeventWorker(Worker):
     def kill(self, jid):
         '''Stop the greenlet processing the provided jid'''
         greenlet = self.greenlets.get(jid)
-        if greenlet != None:
+        if greenlet is not None:
             logger.warn('Lost ownership of %s' % jid)
             greenlet.kill()
-
-    @classmethod
-    def patch(cls):  # pragma: no cover
-        '''Monkey-patch anything that needs to be patched'''
-        from gevent import monkey
-        monkey.patch_all()
 
     def run(self):
         '''Work on jobs'''
         # Register signal handlers
         self.signals()
-
-        # And monkey-patch before doing any imports
-        self.patch()
 
         # Start listening
         with self.listener():

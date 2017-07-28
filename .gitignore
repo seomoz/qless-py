@@ -8,3 +8,6 @@ qless_py.egg-info/*
 .vagrant
 MANIFEST
 .tox/
+venv/
+*.sublime-project
+*.sublime-workspace

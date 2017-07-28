@@ -76,10 +76,14 @@ class Worker(object):
     def sandbox(cls, path):
         '''Ensures path exists before yielding, cleans up after'''
         # Ensure the path exists and is clean
-        if not os.path.exists(path):
-            logger.debug('Making %s' % path)
+        try:
             os.makedirs(path)
-        cls.clean(path)
+            logger.debug('Making %s' % path)
+        except OSError:
+            if not os.path.isdir(path):
+                raise
+        finally:
+            cls.clean(path)
         # Then yield, but make sure to clean up the directory afterwards
         try:
             yield

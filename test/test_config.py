@@ -72,3 +72,7 @@ class TestConfig(TestQless):
         self.assertNotEqual(self.client.config.all, updated)
         self.client.config.update(updated)
         self.assertEqual(self.client.config.all, updated)
+
+    def test_default_config(self):
+        '''We can get default config values.'''
+        self.assertEqual(self.client.config['heartbeat'], 60)
