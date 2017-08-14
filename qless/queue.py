@@ -87,7 +87,24 @@ class Queue(object):
         should be a JSON array of the tags associated with the instance and
         the `valid after` argument should be in how many seconds the instance
         should be considered actionable.'''
-        return self.client('put', self.name,
+        return self.client('put', self.worker_name,
+            self.name,
+            jid or uuid.uuid4().hex,
+            self.class_string(klass),
+            json.dumps(data),
+            delay or 0,
+            'priority', priority or 0,
+            'tags', json.dumps(tags or []),
+            'retries', retries or 5,
+            'depends', json.dumps(depends or [])
+        )
+
+    '''Same function as above but check if the job already exists in the DB beforehand.
+    You can re-queue for instance failed ones.'''
+    def requeue(self, klass, data, priority=None, tags=None, delay=None,
+        retries=None, jid=None, depends=None):
+        return self.client('requeue', self.worker_name,
+            self.name,
             jid or uuid.uuid4().hex,
             self.class_string(klass),
             json.dumps(data),
@@ -117,7 +134,7 @@ class Queue(object):
         of items to be popped off.'''
         results = [Job(self.client, **job) for job in json.loads(
             self.client('pop', self.name, self.worker_name, count or 1))]
-        if count == None:
+        if count is None:
             return (len(results) and results[0]) or None
         return results
 
@@ -126,7 +143,7 @@ class Queue(object):
         items'''
         results = [Job(self.client, **rec) for rec in json.loads(
             self.client('peek', self.name, count or 1))]
-        if count == None:
+        if count is None:
             return (len(results) and results[0]) or None
         return results
 
