@@ -1,9 +1,8 @@
+sudo: false
 services:
   - redis-server
 before_install:
-  - git submodule update --init --recursive
   - make qless-core
-  - sudo apt-get install -y libevent-dev python-all-dev python3-all-dev
 language: python
 python:
   - "2.7"
@@ -12,6 +11,10 @@ python:
   - "3.5"
 install: pip install tox tox-travis
 script: tox
+addons:
+  apt:
+    packages:
+      - libevent-dev
 cache:
   directories:
     - .tox
