@@ -3,40 +3,40 @@
 from setuptools import setup
 
 setup(
-    name                 = 'qless-py',
-    version              = '0.11.4',
-    description          = 'Redis-based Queue Management',
-    long_description     = '''
+    name='qless-py',
+    version='0.11.4',
+    description='Redis-based Queue Management',
+    long_description='''
 Redis-based queue management, with heartbeating, job tracking,
 stats, notifications, and a whole lot more.''',
-    url                  = 'http://github.com/seomoz/qless-py',
-    author               = 'Dan Lecocq',
-    author_email         = 'dan@moz.com',
-    license              = "MIT License",
-    keywords             = 'redis, qless, job',
-    packages             = [
+    url='http://github.com/seomoz/qless-py',
+    author='Dan Lecocq',
+    author_email='dan@moz.com',
+    license="MIT License",
+    keywords='redis, qless, job',
+    packages=[
         'qless',
         'qless.workers'
     ],
-    package_dir          = {
+    package_dir={
         'qless': 'qless',
         'qless.workers': 'qless/workers'
     },
-    package_data         = {
+    package_data={
         'qless': [
             'qless-core/*.lua'
         ]
     },
-    include_package_data = True,
-    scripts              = [
+    include_package_data=True,
+    scripts=[
         'bin/qless-py-worker'
     ],
-    extras_require       = {
+    extras_require={
         'ps': [
             'setproctitle'
         ]
     },
-    install_requires     = [
+    install_requires=[
         'argparse',
         'decorator',
         'hiredis',
@@ -44,14 +44,14 @@ stats, notifications, and a whole lot more.''',
         'six',
         'simplejson'
     ],
-    tests_requires       = [
+    tests_requires=[
         'coverage',
         'mock',
         'nose',
         'rednose',
         'setuptools>=17.1'
     ],
-    classifiers          = [
+    classifiers=[
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 2.7',
